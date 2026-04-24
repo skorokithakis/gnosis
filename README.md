@@ -33,10 +33,11 @@ gnosis topics
 > **Add this to your agent's system prompt:**
 >
 > ```
-> Before starting work and after finishing code, run `gnosis help` and follow its instructions.
+> At the start of any session, run `gnosis help` and follow its instructions. After
+> finishing a task, run `gnosis help review`.
 > ```
 
-`gnosis help` describes three touchpoints: searching before implementing, writing immediately when decisions are made, and running `gnosis help review` after finishing. The instruction above is all you need to add to your config.
+`gnosis help` is the entry point — it describes three touchpoints: searching existing knowledge before implementing, writing entries immediately when decisions are made, and reading `gnosis help review` after finishing. The second command in the snippet above is a belt-and-suspenders reminder so the review criteria are fresh in context right when the agent needs them.
 
 ## Full documentation
 

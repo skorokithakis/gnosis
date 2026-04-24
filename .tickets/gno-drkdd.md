@@ -1,6 +1,6 @@
 ---
 id: gno-drkdd
-status: open
+status: closed
 deps: []
 links: []
 created: 2026-04-24T09:21:21Z
@@ -12,3 +12,9 @@ assignee: Stavros Korokithakis
 
 Create the GitHub repository at github.com/skorokithakis/gnosis. Public repo. Description: 'A knowledge base for what the code can't tell you.' Push the existing code. No special settings needed beyond defaults.
 
+
+## Notes
+
+**2026-04-24T11:58:11Z**
+
+Created and pushed via gh CLI. Repo at https://github.com/skorokithakis/gnosis. Default branch: main.
