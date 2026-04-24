@@ -1,0 +1,80 @@
+gnosis review — guidance for recording knowledge after a session
+
+You've finished work. Before committing, review the session for
+intangibles that should be recorded. This guide helps you decide
+what's worth capturing and what isn't.
+
+WHAT TO LOOK FOR
+
+Scan the session for moments where:
+  - A direction was chosen over alternatives, and the reasoning
+    matters.
+  - An idea was explicitly rejected — and someone might try it again
+    without knowing why it was ruled out.
+  - A pain point or known flaw was mentioned in passing.
+  - Someone expressed intent to change something later.
+  - A non-obvious constraint came up that shaped the implementation.
+  - Something was learned about the system's behavior that isn't
+    captured in the code that was written.
+
+RECORD OR NOT?
+
+  "We're using Postgres 15 for the vector extensions."
+  → No. That's visible in the stack and configuration.
+
+  "We chose Postgres over DynamoDB because we need ad-hoc joins for
+  the reporting module, and DynamoDB's query model couldn't support
+  that without duplicating data across three tables."
+  → Yes. The reasoning isn't in the code.
+
+  "The user model has a 'role' field."
+  → No. Read the code.
+
+  "The 'role' field is a plain string instead of a foreign key because
+  roles come from an external IdP and we don't want to sync them."
+  → Yes. That's a decision with non-obvious reasoning.
+
+  "The tests are slow."
+  → No. Too vague, and anyone running them will notice.
+
+  "The integration tests hit a real Stripe sandbox — don't parallelize
+  them or you'll get rate-limited and they'll flake."
+  → Yes. Hard-won operational knowledge.
+
+  "I added a cache to the search endpoint."
+  → No. The code shows this.
+
+  "We added a cache to search because uncached p99 was 800ms and the
+  SLA is 200ms. We chose a 60s TTL as a compromise — stale results
+  are acceptable for this use case but the product team doesn't want
+  them older than a minute."
+  → Yes. The constraints and tradeoff reasoning aren't in the code.
+
+BE SELECTIVE
+
+A few precise entries are worth more than a wall of noise. Each entry
+should carry enough context that someone encountering it months later
+understands why it matters without needing the original conversation.
+
+If something is already in the code you wrote, the commit message, or
+existing documentation, it doesn't belong here.
+
+TIDYING
+
+Stale knowledge is worse than no knowledge. If during your review you
+notice an existing entry that's been superseded by work in this
+session, either remove it ("gnosis rm") or write a new entry that
+references it ("gnosis write ... --related <old-id>") explaining what
+changed. Don't leave contradictions in the system.
+
+WRITING
+
+  gnosis write <topics> "<text>" [--related id,id]
+
+Topics are comma-separated. Use names that match the system's shape.
+If an entry relates to an existing one, use --related to link them.
+
+Example:
+  gnosis write search-endpoint,caching "We added a 60s TTL cache to
+  search because uncached p99 was 800ms against a 200ms SLA. Stale
+  results are acceptable but product wants them under a minute."

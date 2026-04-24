@@ -1,0 +1,9 @@
+{
+  "packages": {
+    ".": {
+      "release-type": "go"
+    }
+  },
+  "include-component-in-tag": false,
+  "bump-minor-pre-major": true
+}

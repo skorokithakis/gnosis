@@ -1,0 +1,8 @@
+# Build artifacts
+/gnosis
+dist/
+
+# OS/editor
+.DS_Store
+*.swp
+*~
