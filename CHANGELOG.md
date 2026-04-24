@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.4.0](https://github.com/skorokithakis/gnosis/compare/v0.3.0...v0.4.0) (2026-04-24)
+
+
+### Features
+
+* Add color support to terminal output ([132fa8e](https://github.com/skorokithakis/gnosis/commit/132fa8e02bddb2ca6fd5e44968ca5cda95ab3a01))
+* Implement ID prefix resolution and enforce 7-char topic minimum ([c5097e7](https://github.com/skorokithakis/gnosis/commit/c5097e735fd448d0c6953bb09e7cf76b73ed4da7))
+* Split gn help into granular plan and review topics ([6428d57](https://github.com/skorokithakis/gnosis/commit/6428d5719ef457cc6d63bff1e9ffab5563afa533))
+* Switch release workflow to goreleaser ([dbfbf29](https://github.com/skorokithakis/gnosis/commit/dbfbf29014f8d14570db82419014d76061513bf1))
+
 ## [0.3.0](https://github.com/skorokithakis/gnosis/compare/v0.2.0...v0.3.0) (2026-04-24)
 
 
