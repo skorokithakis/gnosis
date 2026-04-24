@@ -165,9 +165,11 @@ func TestShow_by_topic_sorted_chronologically(t *testing.T) {
 	store := newTestStore(t)
 
 	// Append in reverse chronological order to confirm sorting is applied.
+	// The topic name is longer than 6 characters so it is routed to topic
+	// lookup rather than ID-prefix lookup.
 	entry2 := storage.Entry{
 		ID:        "ghjkmn",
-		Topics:    []string{"go-lang"},
+		Topics:    []string{"go-language"},
 		Text:      "Second chronologically.",
 		Related:   []string{},
 		CreatedAt: baseTime.Add(time.Hour),
@@ -175,7 +177,7 @@ func TestShow_by_topic_sorted_chronologically(t *testing.T) {
 	}
 	entry1 := storage.Entry{
 		ID:        "abcdef",
-		Topics:    []string{"go-lang"},
+		Topics:    []string{"go-language"},
 		Text:      "First chronologically.",
 		Related:   []string{},
 		CreatedAt: baseTime,
@@ -184,7 +186,7 @@ func TestShow_by_topic_sorted_chronologically(t *testing.T) {
 	appendEntries(t, store, entry2, entry1)
 
 	var output strings.Builder
-	if err := commands.Show(store, "GoLang", &output); err != nil {
+	if err := commands.Show(store, "GoLanguage", &output); err != nil {
 		t.Fatalf("Show: %v", err)
 	}
 
@@ -213,14 +215,15 @@ func TestShow_by_topic_not_found_returns_error(t *testing.T) {
 	}
 }
 
-// --- ID pattern detection ---
+// --- Dispatch by query length ---
 
-func TestShow_id_pattern_takes_priority_over_topic(t *testing.T) {
+// A query of 6 characters or fewer is always routed to ID-prefix lookup, even
+// when the same string could also be a valid topic name.
+func TestShow_short_query_routes_to_id_lookup(t *testing.T) {
 	store := newTestStore(t)
 
-	// Create an entry whose ID happens to also be a valid topic name.
-	// This is contrived but exercises the "prefer ID" rule. "abcdef" is already
-	// normalized (all lowercase, no separators needed).
+	// "abcdef" is both a valid entry ID and a valid topic name. Because the
+	// query is ≤6 characters, it must be resolved as an ID prefix.
 	entry := storage.Entry{
 		ID:        "abcdef",
 		Topics:    []string{"abcdef"},
@@ -232,7 +235,6 @@ func TestShow_id_pattern_takes_priority_over_topic(t *testing.T) {
 	appendEntries(t, store, entry)
 
 	var output strings.Builder
-	// "abcdef" matches the ID pattern, so it should be treated as an ID lookup.
 	if err := commands.Show(store, "abcdef", &output); err != nil {
 		t.Fatalf("Show: %v", err)
 	}
@@ -247,14 +249,15 @@ func TestShow_id_pattern_takes_priority_over_topic(t *testing.T) {
 	}
 }
 
-// --- ID-pattern fallback to topic ---
+// --- No ID-to-topic fallback ---
 
-// "update" is 6 letters from the allowed alphabet, so it matches the ID
-// pattern. When no entry with that ID exists, Show must fall back to topic
-// lookup and return the matching entries.
-func TestShow_id_pattern_falls_back_to_topic_on_miss(t *testing.T) {
+// A 6-character string that matches no entry ID must return an error. There is
+// no fallback to topic lookup for short queries; the split is purely by length.
+func TestShow_short_query_no_fallback_to_topic(t *testing.T) {
 	store := newTestStore(t)
 
+	// "update" is 6 letters from the allowed alphabet. Even though an entry
+	// with that topic exists, Show must not fall back to topic lookup.
 	entry := storage.Entry{
 		ID:        "abcdef",
 		Topics:    []string{"update"},
@@ -266,13 +269,9 @@ func TestShow_id_pattern_falls_back_to_topic_on_miss(t *testing.T) {
 	appendEntries(t, store, entry)
 
 	var output strings.Builder
-	if err := commands.Show(store, "update", &output); err != nil {
-		t.Fatalf("Show: %v", err)
-	}
-
-	result := output.String()
-	if !strings.Contains(result, "Update strategy entry.") {
-		t.Errorf("output missing expected text: %q", result)
+	err := commands.Show(store, "update", &output)
+	if err == nil {
+		t.Fatal("expected error for 6-char query with no matching ID, got nil")
 	}
 }
 
@@ -317,15 +316,17 @@ func TestShow_not_found_anywhere_returns_error(t *testing.T) {
 	}
 }
 
-// Strings containing excluded letters (i, l, o) must not be treated as IDs
-// even if they are 6 characters long.
-func TestShow_excluded_letters_not_treated_as_id(t *testing.T) {
+// Strings containing excluded letters (i, l, o) that are longer than 6
+// characters are routed to topic lookup. Short strings (≤6 chars) always go
+// to ID-prefix lookup regardless of their character content.
+func TestShow_excluded_letters_routed_to_topic_when_long(t *testing.T) {
 	store := newTestStore(t)
 
-	// "golife" is already normalized (lowercase, no separators needed).
+	// "golifetime" is longer than 6 characters and contains excluded letters,
+	// so it is routed to topic lookup.
 	entry := storage.Entry{
 		ID:        "abcdef",
-		Topics:    []string{"golife"},
+		Topics:    []string{"golifetime"},
 		Text:      "Topic with excluded letters.",
 		Related:   []string{},
 		CreatedAt: baseTime,
@@ -334,9 +335,7 @@ func TestShow_excluded_letters_not_treated_as_id(t *testing.T) {
 	appendEntries(t, store, entry)
 
 	var output strings.Builder
-	// "golife" contains 'l', 'i' — excluded from the ID alphabet — so it must
-	// be treated as a topic, not an ID.
-	if err := commands.Show(store, "golife", &output); err != nil {
+	if err := commands.Show(store, "golifetime", &output); err != nil {
 		t.Fatalf("Show: %v", err)
 	}
 

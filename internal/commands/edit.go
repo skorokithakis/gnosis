@@ -7,6 +7,7 @@ import (
 	"slices"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/skorokithakis/gnosis/internal/storage"
 )
@@ -22,6 +23,12 @@ func normalizeAndDeduplicateTopics(raw []string) ([]string, error) {
 		normalized := storage.NormalizeTopic(topic)
 		if normalized == "" {
 			return nil, fmt.Errorf("topic %q normalizes to empty string", topic)
+		}
+		// Topics must be at least 7 characters in their normalized form so they
+		// cannot be confused with 6-character entry ID prefixes during lookup.
+		// Rune count is used so that multibyte characters are measured correctly.
+		if utf8.RuneCountInString(normalized) < storage.IDLength+1 {
+			return nil, fmt.Errorf("topic %q is too short (normalized form %q has %d characters, minimum is 7)", topic, normalized, utf8.RuneCountInString(normalized))
 		}
 		if seen[normalized] {
 			continue
@@ -119,39 +126,47 @@ func ParseEditBuffer(content string) (ParsedEntry, error) {
 
 // validateEditedEntry checks that the parsed edit result is internally
 // consistent and that all referenced related IDs exist in the store (excluding
-// the entry being edited, since self-references are meaningless).
-func validateEditedEntry(parsed ParsedEntry, entryID string, allEntries []storage.Entry) error {
+// the entry being edited, since self-references are meaningless). It resolves
+// each related value via ResolveIDPrefix so that the caller can store full IDs
+// regardless of whether the user typed a prefix or a complete ID. The returned
+// slice contains the resolved full IDs in the same order as parsed.Related.
+func validateEditedEntry(parsed ParsedEntry, entryID string, allEntries []storage.Entry) ([]string, error) {
 	if len(parsed.Topics) == 0 {
-		return fmt.Errorf("topics must not be empty")
+		return nil, fmt.Errorf("topics must not be empty")
 	}
 	if parsed.Text == "" {
-		return fmt.Errorf("text body must not be empty")
+		return nil, fmt.Errorf("text body must not be empty")
 	}
 
-	existingIDs := make(map[string]bool, len(allEntries))
+	// Build the candidate list excluding the entry being edited so that
+	// self-references are rejected rather than silently accepted.
+	var otherEntries []storage.Entry
 	for _, entry := range allEntries {
 		if entry.ID != entryID {
-			existingIDs[entry.ID] = true
+			otherEntries = append(otherEntries, entry)
 		}
 	}
 
-	for _, relatedID := range parsed.Related {
-		if !existingIDs[relatedID] {
-			return fmt.Errorf("related ID %q does not exist", relatedID)
+	resolvedRelated := make([]string, 0, len(parsed.Related))
+	for _, rawRelated := range parsed.Related {
+		resolvedID, err := ResolveIDPrefix(otherEntries, rawRelated)
+		if err != nil {
+			return nil, fmt.Errorf("related ID %q: %w", rawRelated, err)
 		}
+		resolvedRelated = append(resolvedRelated, resolvedID)
 	}
 
-	return nil
+	return resolvedRelated, nil
 }
 
-// Edit loads the entry with the given ID, opens it in $EDITOR for the user to
-// modify, then validates and saves the result. If the user makes no changes,
-// it prints "no changes" and exits cleanly.
+// Edit loads the entry matching the given ID prefix, opens it in $EDITOR for
+// the user to modify, then validates and saves the result. If the user makes no
+// changes, it prints "no changes" and exits cleanly.
 //
 // The entry is read before the editor is opened so the user sees the current
 // state. The actual save uses Store.Update, which holds an exclusive lock
 // across read-modify-write, preventing concurrent appends from being lost.
-func Edit(store *storage.Store, id string) error {
+func Edit(store *storage.Store, idPrefix string) error {
 	// Read the entry before opening the editor so the user sees the current
 	// state. This read is outside the lock because the editor interaction is
 	// unbounded in time — we cannot hold a lock while waiting for the user.
@@ -159,6 +174,11 @@ func Edit(store *storage.Store, id string) error {
 	allEntries, err := store.ReadAll()
 	if err != nil {
 		return fmt.Errorf("reading entries: %w", err)
+	}
+
+	id, err := ResolveIDPrefix(allEntries, idPrefix)
+	if err != nil {
+		return err
 	}
 
 	entryIndex := -1
@@ -248,8 +268,11 @@ func Edit(store *storage.Store, id string) error {
 	updateErr := store.Update(func(entries []storage.Entry) []storage.Entry {
 		// Validate inside the transform so that the check runs against the
 		// locked snapshot, which may include entries appended since the
-		// pre-editor read.
-		if transformErr = validateEditedEntry(parsed, id, entries); transformErr != nil {
+		// pre-editor read. resolvedRelated contains full IDs even when the
+		// user typed prefixes in the edit buffer.
+		resolvedRelated, err := validateEditedEntry(parsed, id, entries)
+		if err != nil {
+			transformErr = err
 			// Returning the unmodified slice causes Update to rewrite the
 			// file unchanged. We surface the error via the captured variable.
 			return entries
@@ -259,7 +282,7 @@ func Edit(store *storage.Store, id string) error {
 			if entry.ID == id {
 				updated := entry
 				updated.Topics = parsed.Topics
-				updated.Related = parsed.Related
+				updated.Related = resolvedRelated
 				updated.Text = parsed.Text
 				updated.UpdatedAt = time.Now().UTC()
 				entries[index] = updated

@@ -19,8 +19,10 @@ import (
 // 0 respectively, which would make IDs harder to read and transcribe.
 const alphabet = "abcdefghjkmnpqrstuvwxyz"
 
-// idLength is the number of characters in a generated entry ID.
-const idLength = 6
+// IDLength is the number of characters in a generated entry ID. It is exported
+// so that callers can use it to distinguish ID-prefix queries from topic queries
+// without duplicating the constant.
+const IDLength = 6
 
 // Entry is the canonical in-memory representation of a knowledge entry. Topics
 // always holds the normalized form (e.g. "keymaster-token-auth"), never the
@@ -360,7 +362,7 @@ func (store *Store) WithSharedLock(fn func() error) error {
 // avoid visual confusion with digits.
 func GenerateID(existing map[string]bool) string {
 	for {
-		id := make([]byte, idLength)
+		id := make([]byte, IDLength)
 		for position := range id {
 			id[position] = alphabet[rand.IntN(len(alphabet))]
 		}

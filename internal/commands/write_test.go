@@ -12,7 +12,7 @@ import (
 func TestWrite_basic(t *testing.T) {
 	store := newTestStore(t)
 
-	if err := commands.Write(store, []string{"foo,Bar", "hello world"}, io.Discard); err != nil {
+	if err := commands.Write(store, []string{"foo-topic,BarTopic", "hello world"}, io.Discard); err != nil {
 		t.Fatalf("Write: %v", err)
 	}
 
@@ -31,7 +31,7 @@ func TestWrite_basic(t *testing.T) {
 	if len(entry.Topics) != 2 {
 		t.Errorf("expected 2 topics, got %v", entry.Topics)
 	}
-	if entry.Topics[0] != "foo" || entry.Topics[1] != "bar" {
+	if entry.Topics[0] != "foo-topic" || entry.Topics[1] != "bar-topic" {
 		t.Errorf("unexpected topics: %v", entry.Topics)
 	}
 	if entry.Text != "hello world" {
@@ -45,7 +45,7 @@ func TestWrite_output_contains_id(t *testing.T) {
 	store := newTestStore(t)
 
 	var buf strings.Builder
-	if err := commands.Write(store, []string{"topic", "some text"}, &buf); err != nil {
+	if err := commands.Write(store, []string{"some-topic", "some text"}, &buf); err != nil {
 		t.Fatalf("Write: %v", err)
 	}
 
@@ -60,8 +60,8 @@ func TestWrite_output_contains_id(t *testing.T) {
 func TestWrite_topic_deduplication(t *testing.T) {
 	store := newTestStore(t)
 
-	// "foo", "Foo", and "FOO" all normalize to "foo"; only one should be stored.
-	if err := commands.Write(store, []string{"foo,Foo,FOO", "text"}, io.Discard); err != nil {
+	// "foo-topic", "FooTopic", and "foo_topic" all normalize to "foo-topic"; only one should be stored.
+	if err := commands.Write(store, []string{"foo-topic,FooTopic,foo_topic", "text"}, io.Discard); err != nil {
 		t.Fatalf("Write: %v", err)
 	}
 
@@ -72,8 +72,8 @@ func TestWrite_topic_deduplication(t *testing.T) {
 	if len(entries[0].Topics) != 1 {
 		t.Errorf("expected 1 topic after deduplication, got %v", entries[0].Topics)
 	}
-	if entries[0].Topics[0] != "foo" {
-		t.Errorf("expected normalized form %q, got %q", "foo", entries[0].Topics[0])
+	if entries[0].Topics[0] != "foo-topic" {
+		t.Errorf("expected normalized form %q, got %q", "foo-topic", entries[0].Topics[0])
 	}
 }
 
@@ -106,7 +106,7 @@ func TestWrite_related_validation(t *testing.T) {
 	store := newTestStore(t)
 
 	// Write a first entry to get a real ID.
-	if err := commands.Write(store, []string{"topic", "first entry"}, io.Discard); err != nil {
+	if err := commands.Write(store, []string{"some-topic", "first entry"}, io.Discard); err != nil {
 		t.Fatalf("Write first entry: %v", err)
 	}
 	entries, err := store.ReadAll()
@@ -116,12 +116,12 @@ func TestWrite_related_validation(t *testing.T) {
 	existingID := entries[0].ID
 
 	// A valid --related reference should succeed.
-	if err := commands.Write(store, []string{"topic", "second entry", "--related", existingID}, io.Discard); err != nil {
+	if err := commands.Write(store, []string{"some-topic", "second entry", "--related", existingID}, io.Discard); err != nil {
 		t.Fatalf("Write with valid --related: %v", err)
 	}
 
 	// An unknown --related ID must produce an error.
-	err = commands.Write(store, []string{"topic", "third entry", "--related", "zzzzzz"}, io.Discard)
+	err = commands.Write(store, []string{"some-topic", "third entry", "--related", "zzzzzz"}, io.Discard)
 	if err == nil {
 		t.Fatal("expected error for unknown --related ID, got nil")
 	}
@@ -151,7 +151,7 @@ func TestWrite_stdin_fallback(t *testing.T) {
 	writer.Close()
 
 	// No text argument — should fall back to stdin.
-	if err := commands.Write(store, []string{"topic"}, io.Discard); err != nil {
+	if err := commands.Write(store, []string{"some-topic"}, io.Discard); err != nil {
 		t.Fatalf("Write with stdin fallback: %v", err)
 	}
 
@@ -168,7 +168,7 @@ func TestWrite_stdin_fallback(t *testing.T) {
 func TestWrite_empty_text_error(t *testing.T) {
 	store := newTestStore(t)
 
-	err := commands.Write(store, []string{"topic", "   "}, io.Discard)
+	err := commands.Write(store, []string{"some-topic", "   "}, io.Discard)
 	if err == nil {
 		t.Fatal("expected error for empty text, got nil")
 	}
@@ -192,6 +192,55 @@ func TestWrite_no_topics_error(t *testing.T) {
 	err := commands.Write(store, []string{}, io.Discard)
 	if err == nil {
 		t.Fatal("expected error when no topics provided, got nil")
+	}
+}
+
+// TestWrite_short_topic_error verifies that a topic whose normalized form is
+// fewer than 7 characters is rejected to prevent collision with 6-char ID prefixes.
+func TestWrite_short_topic_error(t *testing.T) {
+	store := newTestStore(t)
+
+	for _, badTopic := range []string{"foo", "bar", "topic", "ab", "abcdef"} {
+		err := commands.Write(store, []string{badTopic, "text"}, io.Discard)
+		if err == nil {
+			t.Errorf("expected error for short topic %q, got nil", badTopic)
+		}
+		if err != nil && !strings.Contains(err.Error(), badTopic) {
+			t.Errorf("error for topic %q should mention the topic, got: %v", badTopic, err)
+		}
+	}
+
+	// A topic that is exactly 7 characters in normalized form must be accepted.
+	if err := commands.Write(store, []string{"abcdefg", "text"}, io.Discard); err != nil {
+		t.Errorf("expected no error for 7-char topic, got: %v", err)
+	}
+
+	// Nothing should have been written for the rejected topics.
+	entries, err := store.ReadAll()
+	if err != nil {
+		t.Fatalf("ReadAll: %v", err)
+	}
+	if len(entries) != 1 {
+		t.Errorf("expected 1 entry (the accepted one), got %d", len(entries))
+	}
+}
+
+// TestWrite_multibyte_topic_length_uses_rune_count verifies that the 7-character
+// minimum is measured in runes, not bytes. A topic whose normalized form is
+// exactly 7 runes but more than 7 bytes must be accepted.
+func TestWrite_multibyte_topic_length_uses_rune_count(t *testing.T) {
+	store := newTestStore(t)
+
+	// "αβγδεζη" is 7 Greek letters (7 runes, 14 bytes). It normalizes to
+	// "αβγδεζη" (already lowercase), which is exactly 7 runes and must be
+	// accepted. A 6-rune version must be rejected.
+	if err := commands.Write(store, []string{"αβγδεζη", "text"}, io.Discard); err != nil {
+		t.Errorf("expected no error for 7-rune multibyte topic, got: %v", err)
+	}
+
+	err := commands.Write(store, []string{"αβγδεζ", "text"}, io.Discard)
+	if err == nil {
+		t.Error("expected error for 6-rune multibyte topic, got nil")
 	}
 }
 

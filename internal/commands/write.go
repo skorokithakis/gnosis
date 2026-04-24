@@ -6,6 +6,7 @@ import (
 	"os"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/mattn/go-isatty"
 	"github.com/skorokithakis/gnosis/internal/storage"
@@ -72,6 +73,12 @@ func Write(store *storage.Store, argv []string, writer io.Writer) error {
 		if normalized == "" {
 			return fmt.Errorf("topic %q normalizes to empty string", trimmed)
 		}
+		// Topics must be at least 7 characters in their normalized form so they
+		// cannot be confused with 6-character entry ID prefixes during lookup.
+		// Rune count is used so that multibyte characters are measured correctly.
+		if utf8.RuneCountInString(normalized) < storage.IDLength+1 {
+			return fmt.Errorf("topic %q is too short (normalized form %q has %d characters, minimum is 7)", trimmed, normalized, utf8.RuneCountInString(normalized))
+		}
 		if seenNormalized[normalized] {
 			continue
 		}
@@ -87,23 +94,21 @@ func Write(store *storage.Store, argv []string, writer io.Writer) error {
 		return fmt.Errorf("reading entries: %w", err)
 	}
 
-	existingIDs := make(map[string]bool, len(entries))
-	for _, entry := range entries {
-		existingIDs[entry.ID] = true
-	}
-
-	// Validate --related IDs.
+	// Resolve and validate --related prefixes. Each value is resolved to a full
+	// ID so that the stored Related list always contains full IDs regardless of
+	// whether the user supplied a prefix or a complete ID.
 	var related []string
 	if relatedArg != "" {
-		for _, rawID := range strings.Split(relatedArg, ",") {
-			id := strings.TrimSpace(rawID)
-			if id == "" {
+		for _, rawPrefix := range strings.Split(relatedArg, ",") {
+			prefix := strings.TrimSpace(rawPrefix)
+			if prefix == "" {
 				return fmt.Errorf("related ID must not be empty")
 			}
-			if !existingIDs[id] {
-				return fmt.Errorf("related ID %q does not exist", id)
+			resolvedID, err := ResolveIDPrefix(entries, prefix)
+			if err != nil {
+				return err
 			}
-			related = append(related, id)
+			related = append(related, resolvedID)
 		}
 	}
 

@@ -15,34 +15,37 @@ func Remove(store *storage.Store, argv []string, stdout io.Writer, stderr io.Wri
 		return fmt.Errorf("usage: gn rm <id> [<id>...]")
 	}
 
-	// Read entries once before the lock to validate the requested IDs. We
-	// refuse the whole operation if any ID is unknown, so we need to check
-	// before acquiring the exclusive lock. The locked Update below re-reads
-	// entries, so any entries appended between here and the lock are preserved.
+	// Read entries once before the lock to resolve and validate the requested
+	// prefixes. We refuse the whole operation if any prefix fails to resolve,
+	// so we need to check before acquiring the exclusive lock. The locked
+	// Update below re-reads entries, so any entries appended between here and
+	// the lock are preserved.
 	entries, err := store.ReadAll()
 	if err != nil {
 		return fmt.Errorf("reading entries: %w", err)
 	}
 
-	existingIDs := make(map[string]bool, len(entries))
-	for _, entry := range entries {
-		existingIDs[entry.ID] = true
-	}
-
-	// Validate all requested IDs before touching the file. Partial removal is
-	// confusing, so we refuse the whole operation if any ID is unknown.
-	removeSet := make(map[string]bool, len(argv))
-	for _, id := range argv {
-		if !existingIDs[id] {
-			return fmt.Errorf("entry %q does not exist", id)
+	// Resolve all prefixes to full IDs before touching the file. Partial
+	// removal is confusing, so we refuse the whole operation if any prefix
+	// fails to resolve.
+	resolvedIDs := make([]string, len(argv))
+	for index, prefix := range argv {
+		resolvedID, err := ResolveIDPrefix(entries, prefix)
+		if err != nil {
+			return err
 		}
-		removeSet[id] = true
+		resolvedIDs[index] = resolvedID
 	}
 
 	// warnings collects dangling-reference messages discovered inside the
 	// transform. They are printed after Update returns so that no I/O happens
 	// while the exclusive lock is held.
 	var warnings []string
+
+	removeSet := make(map[string]bool, len(resolvedIDs))
+	for _, id := range resolvedIDs {
+		removeSet[id] = true
+	}
 
 	err = store.Update(func(current []storage.Entry) []storage.Entry {
 		warnings = warnings[:0]
@@ -75,7 +78,7 @@ func Remove(store *storage.Store, argv []string, stdout io.Writer, stderr io.Wri
 		fmt.Fprintln(stderr, warning)
 	}
 
-	for _, id := range argv {
+	for _, id := range resolvedIDs {
 		fmt.Fprintln(stdout, id)
 	}
 

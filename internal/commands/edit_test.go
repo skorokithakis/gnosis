@@ -3,6 +3,7 @@ package commands_test
 import (
 	"fmt"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -367,18 +368,18 @@ EOF`)
 }
 
 // TestEdit_duplicate_normalized_topics_in_buffer_saves_one verifies that
-// writing "Foo,foo" in the topics line saves only one topic, not two.
+// writing "FooTopic, foo-topic" in the topics line saves only one topic, not two.
 func TestEdit_duplicate_normalized_topics_in_buffer_saves_one(t *testing.T) {
 	store := newTestStore(t)
 	entry := sampleEntry("aaaaaa")
-	entry.Topics = []string{"foo"}
+	entry.Topics = []string{"foo-topic"}
 	entry.Text = "original text"
 	entry.Related = []string{}
 	appendEntries(t, store, entry)
 
-	// Editor writes "Foo,foo" — both normalize to "foo"; only one should be saved.
+	// Editor writes "FooTopic, foo-topic" — both normalize to "foo-topic"; only one should be saved.
 	script := writeScript(t, `cat > "$1" <<'EOF'
-# Topics: Foo, foo
+# Topics: FooTopic, foo-topic
 # Related: 
 # ---
 updated text
@@ -396,8 +397,8 @@ EOF`)
 	if len(entries[0].Topics) != 1 {
 		t.Errorf("expected 1 topic after deduplication, got %v", entries[0].Topics)
 	}
-	if entries[0].Topics[0] != "foo" {
-		t.Errorf("expected topic %q, got %q", "foo", entries[0].Topics[0])
+	if entries[0].Topics[0] != "foo-topic" {
+		t.Errorf("expected topic %q, got %q", "foo-topic", entries[0].Topics[0])
 	}
 }
 
@@ -420,6 +421,89 @@ func TestEdit_editor_with_arguments(t *testing.T) {
 
 	if err := commands.Edit(store, "aaaaaa"); err != nil {
 		t.Fatalf("Edit with multi-word EDITOR returned error: %v", err)
+	}
+}
+
+// TestEdit_short_topic_rejected verifies that editing an entry to use a topic
+// whose normalized form is fewer than 7 characters is rejected.
+func TestEdit_short_topic_rejected(t *testing.T) {
+	store := newTestStore(t)
+	appendEntries(t, store, sampleEntry("aaaaaa"))
+
+	script := writeScript(t, `cat > "$1" <<'EOF'
+# Topics: foo
+# Related: 
+# ---
+some text
+EOF`)
+	t.Setenv("EDITOR", script)
+
+	err := commands.Edit(store, "aaaaaa")
+	if err == nil {
+		t.Fatal("expected error for short topic, got nil")
+	}
+	if !strings.Contains(err.Error(), "foo") {
+		t.Errorf("error should mention the offending topic, got: %v", err)
+	}
+}
+
+// TestEdit_related_prefix_resolves_to_full_id verifies that a prefix typed in
+// the Related line of the edit buffer is resolved to the full ID before being
+// stored, matching the behaviour of gn write --related.
+func TestEdit_related_prefix_resolves_to_full_id(t *testing.T) {
+	store := newTestStore(t)
+	appendEntries(t, store, sampleEntry("aaaaaa"), sampleEntry("bbbbbb"))
+
+	// Editor writes a prefix "bbb" in the Related line instead of the full ID.
+	script := writeScript(t, `cat > "$1" <<'EOF'
+# Topics: GoLang
+# Related: bbb
+# ---
+updated text
+EOF`)
+	t.Setenv("EDITOR", script)
+
+	if err := commands.Edit(store, "aaaaaa"); err != nil {
+		t.Fatalf("Edit returned unexpected error: %v", err)
+	}
+
+	entries, err := store.ReadAll()
+	if err != nil {
+		t.Fatalf("ReadAll: %v", err)
+	}
+
+	var updated storage.Entry
+	for _, entry := range entries {
+		if entry.ID == "aaaaaa" {
+			updated = entry
+		}
+	}
+	// The stored Related list must contain the full ID, not the prefix.
+	if len(updated.Related) != 1 || updated.Related[0] != "bbbbbb" {
+		t.Errorf("expected Related to contain full ID %q, got %v", "bbbbbb", updated.Related)
+	}
+}
+
+// TestEdit_related_ambiguous_prefix_rejected verifies that an ambiguous prefix
+// in the Related line is rejected with an error rather than silently stored.
+func TestEdit_related_ambiguous_prefix_rejected(t *testing.T) {
+	store := newTestStore(t)
+	// Three entries: "cccccc" is the one being edited; "aaaaaa" and "aabbbb"
+	// are the candidates. Prefix "aa" is ambiguous among the non-edited entries.
+	appendEntries(t, store, sampleEntry("cccccc"), sampleEntry("aaaaaa"), sampleEntry("aabbbb"))
+
+	// Editor writes prefix "aa" which matches both "aaaaaa" and "aabbbb".
+	script := writeScript(t, `cat > "$1" <<'EOF'
+# Topics: GoLang
+# Related: aa
+# ---
+updated text
+EOF`)
+	t.Setenv("EDITOR", script)
+
+	err := commands.Edit(store, "cccccc")
+	if err == nil {
+		t.Fatal("expected error for ambiguous related prefix, got nil")
 	}
 }
 

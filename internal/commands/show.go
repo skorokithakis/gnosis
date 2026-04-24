@@ -3,24 +3,12 @@ package commands
 import (
 	"fmt"
 	"io"
-	"regexp"
 	"sort"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/skorokithakis/gnosis/internal/storage"
 )
-
-// idPattern matches exactly 6 characters from the allowed ID alphabet. The
-// alphabet excludes i, l, and o to avoid visual confusion with digits, so we
-// check against the same set rather than just [a-z].
-var idPattern = regexp.MustCompile(`^[abcdefghjkmnpqrstuvwxyz]{6}$`)
-
-// isEntryID reports whether target looks like a valid entry ID. We use the
-// pattern rather than just checking length so that strings containing excluded
-// letters (i, l, o) or non-letter characters are not mistaken for IDs.
-func isEntryID(target string) bool {
-	return idPattern.MatchString(target)
-}
 
 // Show implements the `gnosis show <target>` command. It writes output to
 // writer so that callers (including tests) can capture it without redirecting
@@ -28,23 +16,22 @@ func isEntryID(target string) bool {
 // "not found" conditions are reported by returning an error with a descriptive
 // message so the caller can exit with status 1.
 //
-// When target matches the ID pattern, ID lookup is tried first. If no entry
-// with that ID exists, we fall back to topic lookup. This lets common English
-// words like "update" or "search" work as topic names even though they happen
-// to match the 6-letter ID alphabet.
+// Dispatch is purely by query length: a target of 6 characters or fewer is
+// treated as an ID prefix; 7 characters or more is treated as a topic name.
+// This removes the ambiguity of the old ID→topic fallback while still letting
+// short English words work as topic names when they are long enough (≥7 chars).
 func Show(store *storage.Store, target string, writer io.Writer) error {
 	entries, err := store.ReadAll()
 	if err != nil {
 		return fmt.Errorf("reading entries: %w", err)
 	}
 
-	if isEntryID(target) {
-		err := showByID(entries, target, writer)
-		if err == nil {
-			return nil
+	if utf8.RuneCountInString(target) <= storage.IDLength {
+		resolvedID, err := ResolveIDPrefix(entries, target)
+		if err != nil {
+			return err
 		}
-		// ID lookup missed; fall through to topic lookup so that short
-		// English words that happen to match the ID alphabet still work.
+		return showByID(entries, resolvedID, writer)
 	}
 	return showByTopic(entries, target, writer)
 }
