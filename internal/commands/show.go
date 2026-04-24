@@ -9,6 +9,7 @@ import (
 
 	"github.com/skorokithakis/gnosis/internal/storage"
 	"github.com/skorokithakis/gnosis/internal/termcolor"
+	"github.com/skorokithakis/gnosis/internal/textwrap"
 )
 
 // Show implements the `gnosis show <target>` command. It writes output to
@@ -21,7 +22,10 @@ import (
 // treated as an ID prefix; 7 characters or more is treated as a topic name.
 // This removes the ambiguity of the old ID→topic fallback while still letting
 // short English words work as topic names when they are long enough (≥7 chars).
-func Show(store *storage.Store, target string, writer io.Writer) error {
+//
+// wrapWidth controls body text wrapping via textwrap.Wrap. A value of zero or
+// less disables wrapping, which is appropriate for non-TTY output.
+func Show(store *storage.Store, target string, wrapWidth int, writer io.Writer) error {
 	entries, err := store.ReadAll()
 	if err != nil {
 		return fmt.Errorf("reading entries: %w", err)
@@ -37,17 +41,17 @@ func Show(store *storage.Store, target string, writer io.Writer) error {
 		if err != nil {
 			return err
 		}
-		return showByID(entries, resolvedID, allIDs, writer)
+		return showByID(entries, resolvedID, allIDs, wrapWidth, writer)
 	}
-	return showByTopic(entries, target, allIDs, writer)
+	return showByTopic(entries, target, allIDs, wrapWidth, writer)
 }
 
 // showByID finds the single entry whose ID matches target and prints its full
 // details. It returns an error if no entry with that ID exists.
-func showByID(entries []storage.Entry, target string, allIDs []string, writer io.Writer) error {
+func showByID(entries []storage.Entry, target string, allIDs []string, wrapWidth int, writer io.Writer) error {
 	for _, entry := range entries {
 		if entry.ID == target {
-			printEntry(entry, allIDs, writer)
+			printEntry(entry, allIDs, wrapWidth, writer)
 			return nil
 		}
 	}
@@ -56,7 +60,7 @@ func showByID(entries []storage.Entry, target string, allIDs []string, writer io
 
 // showByTopic normalises target, finds all entries that carry that topic, sorts
 // them by creation time, and prints a header followed by each entry.
-func showByTopic(entries []storage.Entry, target string, allIDs []string, writer io.Writer) error {
+func showByTopic(entries []storage.Entry, target string, allIDs []string, wrapWidth int, writer io.Writer) error {
 	normalizedTarget := storage.NormalizeTopic(target)
 
 	var matched []storage.Entry
@@ -84,14 +88,14 @@ func showByTopic(entries []storage.Entry, target string, allIDs []string, writer
 		entryWord = "entry"
 	}
 	fmt.Fprintf(writer, "%s %s  (%s %s)\n\n",
-		termcolor.Dim("Topic:"),
+		termcolor.Dim("topic:"),
 		termcolor.Topic(normalizedTarget),
 		termcolor.Bold(fmt.Sprintf("%d", len(matched))),
 		entryWord,
 	)
 
 	for index, entry := range matched {
-		printEntry(entry, allIDs, writer)
+		printEntry(entry, allIDs, wrapWidth, writer)
 		if index < len(matched)-1 {
 			fmt.Fprintln(writer)
 		}
@@ -103,38 +107,40 @@ func showByTopic(entries []storage.Entry, target string, allIDs []string, writer
 // printEntry writes a single entry to writer in the human-readable terminal
 // format. The layout is:
 //
-//	<id>  [Topic1, Topic2]  created <date>  updated <date>
-//	Related: <id1>, <id2>
+//	id:      <colored unique-prefix id>
+//	topics:  <cyan topic>, <cyan topic>
+//	related: <colored id>, <colored id>   (omitted when entry.Related is empty)
+//	created: <yellow date>
+//	updated: <yellow date>
 //
-//	<text body>
+//	<body, wrapped via textwrap.Wrap when wrapWidth > 0>
 //
-// allIDs is the full set of IDs in the store, forwarded to termcolor.UniqueID
-// so it can determine the shortest unique prefix for each ID.
-func printEntry(entry storage.Entry, allIDs []string, writer io.Writer) {
+// Labels are rendered dim/faint. allIDs is the full set of IDs in the store,
+// forwarded to termcolor.UniqueID so it can determine the shortest unique
+// prefix for each ID.
+func printEntry(entry storage.Entry, allIDs []string, wrapWidth int, writer io.Writer) {
 	coloredTopics := make([]string, len(entry.Topics))
 	for index, topic := range entry.Topics {
 		coloredTopics[index] = termcolor.Topic(topic)
 	}
-	topicsDisplay := "[" + strings.Join(coloredTopics, ", ") + "]"
 
 	createdDate := entry.CreatedAt.Format("2006-01-02")
 	updatedDate := entry.UpdatedAt.Format("2006-01-02")
 
-	fmt.Fprintf(writer, "%s  %s  %s %s  %s %s\n",
-		termcolor.UniqueID(entry.ID, allIDs),
-		topicsDisplay,
-		termcolor.Dim("created"), termcolor.Date(createdDate),
-		termcolor.Dim("updated"), termcolor.Date(updatedDate),
-	)
+	fmt.Fprintf(writer, "%s %s\n", termcolor.Dim("id:"), termcolor.UniqueID(entry.ID, allIDs))
+	fmt.Fprintf(writer, "%s %s\n", termcolor.Dim("topics:"), strings.Join(coloredTopics, ", "))
 
 	if len(entry.Related) > 0 {
 		coloredRelated := make([]string, len(entry.Related))
 		for index, relatedID := range entry.Related {
 			coloredRelated[index] = termcolor.UniqueID(relatedID, allIDs)
 		}
-		fmt.Fprintf(writer, "%s %s\n", termcolor.Dim("Related:"), strings.Join(coloredRelated, ", "))
+		fmt.Fprintf(writer, "%s %s\n", termcolor.Dim("related:"), strings.Join(coloredRelated, ", "))
 	}
 
+	fmt.Fprintf(writer, "%s %s\n", termcolor.Dim("created:"), termcolor.Date(createdDate))
+	fmt.Fprintf(writer, "%s %s\n", termcolor.Dim("updated:"), termcolor.Date(updatedDate))
+
 	fmt.Fprintln(writer)
-	fmt.Fprintln(writer, entry.Text)
+	fmt.Fprintln(writer, textwrap.Wrap(entry.Text, wrapWidth))
 }

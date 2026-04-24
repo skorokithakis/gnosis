@@ -129,7 +129,7 @@ func TestShow_prefix_resolves_to_entry(t *testing.T) {
 	appendEntries(t, store, entry)
 
 	var output strings.Builder
-	if err := commands.Show(store, "abc", &output); err != nil {
+	if err := commands.Show(store, "abc", 0, &output); err != nil {
 		t.Fatalf("Show with prefix: %v", err)
 	}
 	if !strings.Contains(output.String(), "Found by prefix.") {
@@ -145,7 +145,7 @@ func TestShow_ambiguous_prefix_returns_error(t *testing.T) {
 	)
 
 	var output strings.Builder
-	err := commands.Show(store, "abc", &output)
+	err := commands.Show(store, "abc", 0, &output)
 	if err == nil {
 		t.Fatal("expected error for ambiguous prefix, got nil")
 	}

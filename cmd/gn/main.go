@@ -4,9 +4,11 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/mattn/go-isatty"
 	"github.com/skorokithakis/gnosis/internal/commands"
 	"github.com/skorokithakis/gnosis/internal/doctrine"
 	"github.com/skorokithakis/gnosis/internal/storage"
+	"golang.org/x/term"
 )
 
 func notImplemented(command string) {
@@ -73,7 +75,13 @@ func main() {
 			fmt.Fprintf(os.Stderr, "gn: %v\n", err)
 			os.Exit(1)
 		}
-		if err := commands.Show(store, os.Args[2], os.Stdout); err != nil {
+		wrapWidth := 0
+		if isatty.IsTerminal(os.Stdout.Fd()) {
+			if width, _, err := term.GetSize(int(os.Stdout.Fd())); err == nil {
+				wrapWidth = min(width, 80)
+			}
+		}
+		if err := commands.Show(store, os.Args[2], wrapWidth, os.Stdout); err != nil {
 			fmt.Fprintf(os.Stderr, "gn show: %v\n", err)
 			os.Exit(1)
 		}

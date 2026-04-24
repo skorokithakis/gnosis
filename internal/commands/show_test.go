@@ -28,7 +28,7 @@ func TestShow_by_id_prints_entry(t *testing.T) {
 	appendEntries(t, store, entry)
 
 	var output strings.Builder
-	if err := commands.Show(store, "abcdef", &output); err != nil {
+	if err := commands.Show(store, "abcdef", 0, &output); err != nil {
 		t.Fatalf("Show: %v", err)
 	}
 
@@ -37,17 +37,29 @@ func TestShow_by_id_prints_entry(t *testing.T) {
 	if !strings.Contains(result, "abcdef") {
 		t.Errorf("output missing ID: %q", result)
 	}
-	if !strings.Contains(result, "[keymaster-token-auth, session-management]") {
-		t.Errorf("output missing topics: %q", result)
+	if !strings.Contains(result, "topics:") {
+		t.Errorf("output missing topics label: %q", result)
 	}
-	if !strings.Contains(result, "created 2026-04-24") {
-		t.Errorf("output missing created date: %q", result)
+	if !strings.Contains(result, "keymaster-token-auth") {
+		t.Errorf("output missing topic keymaster-token-auth: %q", result)
 	}
-	if !strings.Contains(result, "updated 2026-04-24") {
-		t.Errorf("output missing updated date: %q", result)
+	if !strings.Contains(result, "session-management") {
+		t.Errorf("output missing topic session-management: %q", result)
 	}
-	if !strings.Contains(result, "Related: ghjkmn") {
-		t.Errorf("output missing related IDs: %q", result)
+	if !strings.Contains(result, "created:") {
+		t.Errorf("output missing created label: %q", result)
+	}
+	if !strings.Contains(result, "2026-04-24") {
+		t.Errorf("output missing date: %q", result)
+	}
+	if !strings.Contains(result, "updated:") {
+		t.Errorf("output missing updated label: %q", result)
+	}
+	if !strings.Contains(result, "related:") {
+		t.Errorf("output missing related label: %q", result)
+	}
+	if !strings.Contains(result, "ghjkmn") {
+		t.Errorf("output missing related ID: %q", result)
 	}
 	if !strings.Contains(result, "We decided on JWTs for backward compat.") {
 		t.Errorf("output missing text body: %q", result)
@@ -58,7 +70,7 @@ func TestShow_by_id_not_found_returns_error(t *testing.T) {
 	store := newTestStore(t)
 
 	var output strings.Builder
-	err := commands.Show(store, "abcdef", &output)
+	err := commands.Show(store, "abcdef", 0, &output)
 	if err == nil {
 		t.Fatal("expected error for missing ID, got nil")
 	}
@@ -80,12 +92,12 @@ func TestShow_by_id_no_related_omits_related_line(t *testing.T) {
 	appendEntries(t, store, entry)
 
 	var output strings.Builder
-	if err := commands.Show(store, "abcdef", &output); err != nil {
+	if err := commands.Show(store, "abcdef", 0, &output); err != nil {
 		t.Fatalf("Show: %v", err)
 	}
 
-	if strings.Contains(output.String(), "Related:") {
-		t.Errorf("output should not contain Related line when there are no related entries: %q", output.String())
+	if strings.Contains(output.String(), "related:") {
+		t.Errorf("output should not contain related line when there are no related entries: %q", output.String())
 	}
 }
 
@@ -113,7 +125,7 @@ func TestShow_by_topic_finds_entries(t *testing.T) {
 	appendEntries(t, store, entry1, entry2)
 
 	var output strings.Builder
-	if err := commands.Show(store, "KeymasterTokenAuth", &output); err != nil {
+	if err := commands.Show(store, "KeymasterTokenAuth", 0, &output); err != nil {
 		t.Fatalf("Show: %v", err)
 	}
 
@@ -151,7 +163,7 @@ func TestShow_by_topic_case_insensitive(t *testing.T) {
 	// All of these normalize to "keymaster-token-auth" and should find the entry.
 	for _, target := range []string{"KeymasterTokenAuth", "keymasterTokenAuth", "keymaster_token_auth", "keymaster-token-auth"} {
 		var output strings.Builder
-		if err := commands.Show(store, target, &output); err != nil {
+		if err := commands.Show(store, target, 0, &output); err != nil {
 			t.Errorf("Show(%q): unexpected error: %v", target, err)
 			continue
 		}
@@ -186,7 +198,7 @@ func TestShow_by_topic_sorted_chronologically(t *testing.T) {
 	appendEntries(t, store, entry2, entry1)
 
 	var output strings.Builder
-	if err := commands.Show(store, "GoLanguage", &output); err != nil {
+	if err := commands.Show(store, "GoLanguage", 0, &output); err != nil {
 		t.Fatalf("Show: %v", err)
 	}
 
@@ -206,7 +218,7 @@ func TestShow_by_topic_not_found_returns_error(t *testing.T) {
 	store := newTestStore(t)
 
 	var output strings.Builder
-	err := commands.Show(store, "NonExistentTopic", &output)
+	err := commands.Show(store, "NonExistentTopic", 0, &output)
 	if err == nil {
 		t.Fatal("expected error for missing topic, got nil")
 	}
@@ -235,13 +247,13 @@ func TestShow_short_query_routes_to_id_lookup(t *testing.T) {
 	appendEntries(t, store, entry)
 
 	var output strings.Builder
-	if err := commands.Show(store, "abcdef", &output); err != nil {
+	if err := commands.Show(store, "abcdef", 0, &output); err != nil {
 		t.Fatalf("Show: %v", err)
 	}
 
 	result := output.String()
-	// ID-mode output starts with the ID on the first line, not a "Topic:" header.
-	if strings.HasPrefix(result, "Topic:") {
+	// ID-mode output starts with the id: label, not a "topic:" banner.
+	if strings.HasPrefix(result, "topic:") {
 		t.Errorf("expected ID-mode output, got topic-mode output: %q", result)
 	}
 	if !strings.Contains(result, "abcdef") {
@@ -269,7 +281,7 @@ func TestShow_short_query_no_fallback_to_topic(t *testing.T) {
 	appendEntries(t, store, entry)
 
 	var output strings.Builder
-	err := commands.Show(store, "update", &output)
+	err := commands.Show(store, "update", 0, &output)
 	if err == nil {
 		t.Fatal("expected error for 6-char query with no matching ID, got nil")
 	}
@@ -291,13 +303,13 @@ func TestShow_id_pattern_prefers_id_when_entry_exists(t *testing.T) {
 	appendEntries(t, store, entry)
 
 	var output strings.Builder
-	if err := commands.Show(store, "abcdef", &output); err != nil {
+	if err := commands.Show(store, "abcdef", 0, &output); err != nil {
 		t.Fatalf("Show: %v", err)
 	}
 
 	result := output.String()
-	// ID-mode output starts with the ID, not a "Topic:" header.
-	if strings.HasPrefix(result, "Topic:") {
+	// ID-mode output starts with the id: label, not a "topic:" banner.
+	if strings.HasPrefix(result, "topic:") {
 		t.Errorf("expected ID-mode output, got topic-mode output: %q", result)
 	}
 	if !strings.Contains(result, "Entry found by ID.") {
@@ -310,7 +322,7 @@ func TestShow_not_found_anywhere_returns_error(t *testing.T) {
 	store := newTestStore(t)
 
 	var output strings.Builder
-	err := commands.Show(store, "nonsense-that-isnt-in-the-kb", &output)
+	err := commands.Show(store, "nonsense-that-isnt-in-the-kb", 0, &output)
 	if err == nil {
 		t.Fatal("expected error for unknown target, got nil")
 	}
@@ -335,11 +347,69 @@ func TestShow_excluded_letters_routed_to_topic_when_long(t *testing.T) {
 	appendEntries(t, store, entry)
 
 	var output strings.Builder
-	if err := commands.Show(store, "golifetime", &output); err != nil {
+	if err := commands.Show(store, "golifetime", 0, &output); err != nil {
 		t.Fatalf("Show: %v", err)
 	}
 
 	if !strings.Contains(output.String(), "Topic with excluded letters.") {
 		t.Errorf("output missing expected text: %q", output.String())
+	}
+}
+
+// --- Body wrapping ---
+
+// When wrapWidth > 0, long lines in the body are wrapped at that width.
+func TestShow_body_wraps_when_wrapWidth_positive(t *testing.T) {
+	store := newTestStore(t)
+	// Construct a body that is a single long line well over 20 characters.
+	longBody := "one two three four five six seven eight nine ten"
+	entry := storage.Entry{
+		ID:        "abcdef",
+		Topics:    []string{"go-lang"},
+		Text:      longBody,
+		Related:   []string{},
+		CreatedAt: baseTime,
+		UpdatedAt: baseTime,
+	}
+	appendEntries(t, store, entry)
+
+	var output strings.Builder
+	if err := commands.Show(store, "abcdef", 20, &output); err != nil {
+		t.Fatalf("Show: %v", err)
+	}
+
+	result := output.String()
+	// textwrap.Wrap with width=20 must produce exactly these line breaks for
+	// the 48-character input. Comparing against the exact wrapped string rules
+	// out the false-positive where the trailing newline from fmt.Fprintln
+	// satisfies a bare "contains newline" check even when wrapping is broken.
+	wantBody := "one two three four\nfive six seven eight\nnine ten"
+	if !strings.Contains(result, wantBody) {
+		t.Errorf("expected wrapped body %q in output, got: %q", wantBody, result)
+	}
+}
+
+// When wrapWidth is 0, the body is returned unchanged regardless of line length.
+func TestShow_body_not_wrapped_when_wrapWidth_zero(t *testing.T) {
+	store := newTestStore(t)
+	longBody := "one two three four five six seven eight nine ten"
+	entry := storage.Entry{
+		ID:        "abcdef",
+		Topics:    []string{"go-lang"},
+		Text:      longBody,
+		Related:   []string{},
+		CreatedAt: baseTime,
+		UpdatedAt: baseTime,
+	}
+	appendEntries(t, store, entry)
+
+	var output strings.Builder
+	if err := commands.Show(store, "abcdef", 0, &output); err != nil {
+		t.Fatalf("Show: %v", err)
+	}
+
+	// The body must appear verbatim as a single line (no wrapping newlines).
+	if !strings.Contains(output.String(), longBody) {
+		t.Errorf("expected unwrapped body to appear verbatim, got: %q", output.String())
 	}
 }
