@@ -1,0 +1,34 @@
+version: 2
+
+builds:
+  - id: gn
+    main: ./cmd/gn
+    binary: gn
+    goos:
+      - linux
+      - darwin
+    goarch:
+      - amd64
+      - arm64
+
+archives:
+  - formats:
+      - tar.gz
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    files:
+      - README.md
+      - LICENSE
+      - CHANGELOG.md
+
+checksum:
+  name_template: checksums.txt
+
+changelog:
+  # release-please owns the changelog and release notes; goreleaser must not
+  # generate its own or it will overwrite what release-please wrote.
+  disable: true
+
+release:
+  # release-please already creates the GitHub release before this job runs,
+  # so goreleaser must append artifacts rather than try to create a new release.
+  mode: append
