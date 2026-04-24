@@ -9,6 +9,7 @@ import (
 
 	"github.com/skorokithakis/gnosis/internal/index"
 	"github.com/skorokithakis/gnosis/internal/storage"
+	"github.com/skorokithakis/gnosis/internal/termcolor"
 )
 
 // fts5OperatorPattern matches any character sequence that indicates the user
@@ -101,19 +102,21 @@ func Search(store *storage.Store, argv []string, writer io.Writer) error {
 	}
 
 	// Build a map from entry ID to entry so we can look up the primary topic
-	// for each hit without a linear scan per result.
+	// for each hit without a linear scan per result. Also collect all IDs so
+	// that UniqueID can determine the shortest unambiguous prefix for each hit.
 	entries, err := store.ReadAll()
 	if err != nil {
 		return fmt.Errorf("reading entries: %w", err)
 	}
 	entryByID := make(map[string]storage.Entry, len(entries))
+	allIDs := make([]string, 0, len(entries))
 	for _, entry := range entries {
 		entryByID[entry.ID] = entry
+		allIDs = append(allIDs, entry.ID)
 	}
 
-	// Determine column widths for readable alignment. We pad the ID and topic
-	// columns so that snippets start at a consistent horizontal position.
-	const idWidth = 6
+	// Determine the maximum topic width across all hits so that snippets start
+	// at a consistent horizontal position regardless of topic name length.
 	maxTopicWidth := 0
 	for _, hit := range hits {
 		entry, found := entryByID[hit.EntryID]
@@ -136,11 +139,16 @@ func Search(store *storage.Store, argv []string, writer io.Writer) error {
 		// snippet() may include from the indexed text) to single spaces so
 		// that each result occupies exactly one output line.
 		snippet := whitespaceRunPattern.ReplaceAllString(hit.Snippet, " ")
-		fmt.Fprintf(writer, "%-*s  %-*s  %s\n",
-			idWidth, hit.EntryID,
-			maxTopicWidth, primaryTopic,
-			snippet,
-		)
+
+		// IDs are always 6 bytes, so no id-side padding is needed.
+		// We color the id and topic separately and then append explicit spaces
+		// for the topic column, because fmt.Fprintf's %-*s measures width by
+		// byte length — ANSI escape sequences would inflate the count and
+		// misalign the snippet column.
+		coloredID := termcolor.UniqueID(hit.EntryID, allIDs)
+		coloredTopic := termcolor.Topic(primaryTopic)
+		topicPad := strings.Repeat(" ", maxTopicWidth-len(primaryTopic))
+		fmt.Fprintf(writer, "%s  %s%s  %s\n", coloredID, coloredTopic, topicPad, snippet)
 	}
 
 	return nil

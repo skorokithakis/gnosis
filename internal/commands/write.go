@@ -10,6 +10,7 @@ import (
 
 	"github.com/mattn/go-isatty"
 	"github.com/skorokithakis/gnosis/internal/storage"
+	"github.com/skorokithakis/gnosis/internal/termcolor"
 )
 
 // Write implements the "gnosis write <topics> <text> [--related id,id]" command.
@@ -128,6 +129,17 @@ func Write(store *storage.Store, argv []string, writer io.Writer) error {
 		return fmt.Errorf("appending entry: %w", err)
 	}
 
-	fmt.Fprintln(writer, newID)
+	// Re-read all entries (which now includes the just-written one) so that
+	// UniqueID can compute the shortest unambiguous prefix for the new ID.
+	allEntries, err := store.ReadAll()
+	if err != nil {
+		return fmt.Errorf("reading entries after write: %w", err)
+	}
+	allIDs := make([]string, 0, len(allEntries))
+	for _, entry := range allEntries {
+		allIDs = append(allIDs, entry.ID)
+	}
+
+	fmt.Fprintln(writer, termcolor.UniqueID(newID, allIDs))
 	return nil
 }

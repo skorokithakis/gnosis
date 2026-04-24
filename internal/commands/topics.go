@@ -6,6 +6,7 @@ import (
 	"sort"
 
 	"github.com/skorokithakis/gnosis/internal/storage"
+	"github.com/skorokithakis/gnosis/internal/termcolor"
 )
 
 // TopicAggregate holds the normalized topic name and its entry count.
@@ -63,7 +64,11 @@ func Topics(store *storage.Store, writer io.Writer) error {
 	width := countWidth(maxCount)
 
 	for _, aggregate := range aggregates {
-		fmt.Fprintf(writer, "%*d  %s\n", width, aggregate.Count, aggregate.Topic)
+		// Format the number at the correct width first, then wrap in Bold so
+		// that ANSI escape bytes do not inflate the field width the way
+		// fmt.Fprintf's %*d would if the color codes were already embedded.
+		countStr := termcolor.Bold(fmt.Sprintf("%*d", width, aggregate.Count))
+		fmt.Fprintf(writer, "%s  %s\n", countStr, termcolor.Topic(aggregate.Topic))
 	}
 
 	return nil

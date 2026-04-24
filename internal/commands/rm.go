@@ -5,6 +5,7 @@ import (
 	"io"
 
 	"github.com/skorokithakis/gnosis/internal/storage"
+	"github.com/skorokithakis/gnosis/internal/termcolor"
 )
 
 // Remove implements the "gnosis rm <id> [<id>...]" command. argv should be
@@ -23,6 +24,14 @@ func Remove(store *storage.Store, argv []string, stdout io.Writer, stderr io.Wri
 	entries, err := store.ReadAll()
 	if err != nil {
 		return fmt.Errorf("reading entries: %w", err)
+	}
+
+	// Capture all IDs before deletion so that UniqueID can compute unambiguous
+	// prefixes against the full pre-deletion set. After deletion the removed
+	// IDs are gone from the store, so we must snapshot now.
+	allIDs := make([]string, 0, len(entries))
+	for _, entry := range entries {
+		allIDs = append(allIDs, entry.ID)
 	}
 
 	// Resolve all prefixes to full IDs before touching the file. Partial
@@ -79,7 +88,7 @@ func Remove(store *storage.Store, argv []string, stdout io.Writer, stderr io.Wri
 	}
 
 	for _, id := range resolvedIDs {
-		fmt.Fprintln(stdout, id)
+		fmt.Fprintln(stdout, termcolor.UniqueID(id, allIDs))
 	}
 
 	return nil

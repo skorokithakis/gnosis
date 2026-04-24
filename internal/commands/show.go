@@ -8,6 +8,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/skorokithakis/gnosis/internal/storage"
+	"github.com/skorokithakis/gnosis/internal/termcolor"
 )
 
 // Show implements the `gnosis show <target>` command. It writes output to
@@ -26,22 +27,27 @@ func Show(store *storage.Store, target string, writer io.Writer) error {
 		return fmt.Errorf("reading entries: %w", err)
 	}
 
+	allIDs := make([]string, len(entries))
+	for index, entry := range entries {
+		allIDs[index] = entry.ID
+	}
+
 	if utf8.RuneCountInString(target) <= storage.IDLength {
 		resolvedID, err := ResolveIDPrefix(entries, target)
 		if err != nil {
 			return err
 		}
-		return showByID(entries, resolvedID, writer)
+		return showByID(entries, resolvedID, allIDs, writer)
 	}
-	return showByTopic(entries, target, writer)
+	return showByTopic(entries, target, allIDs, writer)
 }
 
 // showByID finds the single entry whose ID matches target and prints its full
 // details. It returns an error if no entry with that ID exists.
-func showByID(entries []storage.Entry, target string, writer io.Writer) error {
+func showByID(entries []storage.Entry, target string, allIDs []string, writer io.Writer) error {
 	for _, entry := range entries {
 		if entry.ID == target {
-			printEntry(entry, writer)
+			printEntry(entry, allIDs, writer)
 			return nil
 		}
 	}
@@ -50,7 +56,7 @@ func showByID(entries []storage.Entry, target string, writer io.Writer) error {
 
 // showByTopic normalises target, finds all entries that carry that topic, sorts
 // them by creation time, and prints a header followed by each entry.
-func showByTopic(entries []storage.Entry, target string, writer io.Writer) error {
+func showByTopic(entries []storage.Entry, target string, allIDs []string, writer io.Writer) error {
 	normalizedTarget := storage.NormalizeTopic(target)
 
 	var matched []storage.Entry
@@ -77,10 +83,15 @@ func showByTopic(entries []storage.Entry, target string, writer io.Writer) error
 	if len(matched) == 1 {
 		entryWord = "entry"
 	}
-	fmt.Fprintf(writer, "Topic: %s  (%d %s)\n\n", normalizedTarget, len(matched), entryWord)
+	fmt.Fprintf(writer, "%s %s  (%s %s)\n\n",
+		termcolor.Dim("Topic:"),
+		termcolor.Topic(normalizedTarget),
+		termcolor.Bold(fmt.Sprintf("%d", len(matched))),
+		entryWord,
+	)
 
 	for index, entry := range matched {
-		printEntry(entry, writer)
+		printEntry(entry, allIDs, writer)
 		if index < len(matched)-1 {
 			fmt.Fprintln(writer)
 		}
@@ -96,16 +107,32 @@ func showByTopic(entries []storage.Entry, target string, writer io.Writer) error
 //	Related: <id1>, <id2>
 //
 //	<text body>
-func printEntry(entry storage.Entry, writer io.Writer) {
-	topicsDisplay := "[" + strings.Join(entry.Topics, ", ") + "]"
+//
+// allIDs is the full set of IDs in the store, forwarded to termcolor.UniqueID
+// so it can determine the shortest unique prefix for each ID.
+func printEntry(entry storage.Entry, allIDs []string, writer io.Writer) {
+	coloredTopics := make([]string, len(entry.Topics))
+	for index, topic := range entry.Topics {
+		coloredTopics[index] = termcolor.Topic(topic)
+	}
+	topicsDisplay := "[" + strings.Join(coloredTopics, ", ") + "]"
+
 	createdDate := entry.CreatedAt.Format("2006-01-02")
 	updatedDate := entry.UpdatedAt.Format("2006-01-02")
 
-	fmt.Fprintf(writer, "%s  %s  created %s  updated %s\n",
-		entry.ID, topicsDisplay, createdDate, updatedDate)
+	fmt.Fprintf(writer, "%s  %s  %s %s  %s %s\n",
+		termcolor.UniqueID(entry.ID, allIDs),
+		topicsDisplay,
+		termcolor.Dim("created"), termcolor.Date(createdDate),
+		termcolor.Dim("updated"), termcolor.Date(updatedDate),
+	)
 
 	if len(entry.Related) > 0 {
-		fmt.Fprintf(writer, "Related: %s\n", strings.Join(entry.Related, ", "))
+		coloredRelated := make([]string, len(entry.Related))
+		for index, relatedID := range entry.Related {
+			coloredRelated[index] = termcolor.UniqueID(relatedID, allIDs)
+		}
+		fmt.Fprintf(writer, "%s %s\n", termcolor.Dim("Related:"), strings.Join(coloredRelated, ", "))
 	}
 
 	fmt.Fprintln(writer)
