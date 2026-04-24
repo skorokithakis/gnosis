@@ -16,7 +16,41 @@ var (
 	cyan        = color.New(color.FgCyan)
 	yellow      = color.New(color.FgYellow)
 	bold        = color.New(color.Bold)
+	boldRed     = color.New(color.FgRed, color.Bold)
 )
+
+// HighlightMatches replaces every (start, end) sentinel pair in s with a
+// rendering of the enclosed text. When color output is enabled (TTY, no
+// NO_COLOR), matches are rendered in bold red — grep's convention. When color
+// is disabled, sentinels fall back to literal '[' and ']' brackets so the
+// match boundaries remain visible in pipes, files, and dumb terminals.
+//
+// FTS5 emits balanced start/end pairs, so independently replacing each
+// sentinel with its corresponding ANSI sequence yields correct output without
+// needing to parse spans.
+func HighlightMatches(s, start, end string) string {
+	if color.NoColor {
+		s = strings.ReplaceAll(s, start, "[")
+		s = strings.ReplaceAll(s, end, "]")
+		return s
+	}
+	// Derive the open/close ANSI sequences from boldRed by sprinting a known
+	// sentinel character and splitting on it. This keeps the actual escape
+	// codes owned by fatih/color rather than hardcoding them here.
+	wrapped := boldRed.Sprint("\x01")
+	parts := strings.SplitN(wrapped, "\x01", 2)
+	if len(parts) != 2 {
+		// boldRed produced no escape codes (color unexpectedly disabled);
+		// fall back to brackets so output is still readable.
+		s = strings.ReplaceAll(s, start, "[")
+		s = strings.ReplaceAll(s, end, "]")
+		return s
+	}
+	openSeq, closeSeq := parts[0], parts[1]
+	s = strings.ReplaceAll(s, start, openSeq)
+	s = strings.ReplaceAll(s, end, closeSeq)
+	return s
+}
 
 // SplitUniquePrefix returns the shortest prefix of id that does not match the
 // start of any other ID in allIDs, plus the remaining characters of id.

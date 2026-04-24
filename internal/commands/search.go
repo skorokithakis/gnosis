@@ -139,6 +139,10 @@ func Search(store *storage.Store, argv []string, writer io.Writer) error {
 		// snippet() may include from the indexed text) to single spaces so
 		// that each result occupies exactly one output line.
 		snippet := whitespaceRunPattern.ReplaceAllString(hit.Snippet, " ")
+		// Render match-delimiter sentinels emitted by FTS5's snippet() as
+		// bold red on color terminals, falling back to literal brackets
+		// elsewhere.
+		snippet = termcolor.HighlightMatches(snippet, index.MatchStart, index.MatchEnd)
 
 		// IDs are always 6 bytes, so no id-side padding is needed.
 		// We color the id and topic separately and then append explicit spaces
