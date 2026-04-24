@@ -42,7 +42,3 @@ gn topics
 ## Full documentation
 
 Run `gn help plan` for the full doctrine, and `gn help review` for guidance on recording knowledge after a session. `gn help` by itself prints a short overview and the command list.
-
-## License
-
-MIT — Copyright (c) 2026 Stavros Korokithakis
