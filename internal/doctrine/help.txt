@@ -54,7 +54,7 @@ If you are an AI agent, gnosis has three touchpoints in your workflow:
 
 1. After planning, before implementing:
    You've read the task and laid out a plan. Before writing any code,
-   run "gnosis search" with keywords from your plan — system names,
+   run "gn search" with keywords from your plan — system names,
    feature areas, technical concepts you're about to touch.
 
    Read what comes back. If any recorded decision conflicts with your
@@ -64,18 +64,18 @@ If you are an AI agent, gnosis has three touchpoints in your workflow:
 
 2. During work:
    If a decision is made or an alternative is explicitly rejected,
-   record it immediately with "gnosis write" rather than waiting for
+   record it immediately with "gn write" rather than waiting for
    the end of the session. Context may be lost before you get to the
    review step.
 
 3. After finishing work:
-   Run "gnosis help review" and follow its guidance.
+   Run "gn help review" and follow its guidance.
 
 TIDYING
 
 Stale knowledge is worse than no knowledge. When a recorded decision
-is overturned, either remove the old entry ("gnosis rm") or write a
-new one that references it ("gnosis write ... --related <old-id>")
+is overturned, either remove the old entry ("gn rm") or write a
+new one that references it ("gn write ... --related <old-id>")
 explaining what changed. Don't leave contradictions in the system.
 
 TOPICS
@@ -93,17 +93,17 @@ areas, service names. They'll evolve as the codebase does.
 
 COMMANDS
 
-  gnosis help                Show this text.
-  gnosis help review         Guidance for reviewing a session (read this
+  gn help                Show this text.
+  gn help review         Guidance for reviewing a session (read this
                              after finishing work, before writing entries).
-  gnosis write <topics> <text> [--related id,id]
+  gn write <topics> <text> [--related id,id]
                              Record an entry. Topics are comma-separated.
-  gnosis search <query>      Search entries by keyword.
-  gnosis show <id|topic>     Show one entry or all entries for a topic.
-  gnosis topics              List all topics with entry counts.
-  gnosis edit <id>           Edit an entry in $EDITOR.
-  gnosis rm <id> [id...]     Remove entries.
-  gnosis reindex             Rebuild the search index.
+  gn search <query>      Search entries by keyword.
+  gn show <id|topic>     Show one entry or all entries for a topic.
+  gn topics              List all topics with entry counts.
+  gn edit <id>           Edit an entry in $EDITOR.
+  gn rm <id> [id...]     Remove entries.
+  gn reindex             Rebuild the search index.
 
 Entries are identified by short IDs (six lowercase letters), printed
 when you create them. Each entry tracks when it was created and last

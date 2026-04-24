@@ -67,7 +67,7 @@ func Search(store *storage.Store, argv []string, writer io.Writer) error {
 	}
 
 	if len(queryArgs) == 0 {
-		return fmt.Errorf("usage: gnosis search <query> [--limit N]")
+		return fmt.Errorf("usage: gn search <query> [--limit N]")
 	}
 
 	// Join all non-flag arguments as the query so that users can write

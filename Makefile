@@ -1,13 +1,13 @@
 .PHONY: build install test clean
 
 build:
-	go build -o gnosis ./cmd/gnosis
+	go build -o gn ./cmd/gn
 
 install:
-	go install ./cmd/gnosis
+	go install ./cmd/gn
 
 test:
 	go test ./...
 
 clean:
-	rm -f gnosis
+	rm -f gn

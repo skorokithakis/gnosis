@@ -16,7 +16,7 @@ import (
 // written to writer, matching the io.Writer pattern used by other commands.
 func Write(store *storage.Store, argv []string, writer io.Writer) error {
 	if len(argv) == 0 {
-		return fmt.Errorf("usage: gnosis write <topics> <text> [--related id,id]")
+		return fmt.Errorf("usage: gn write <topics> <text> [--related id,id]")
 	}
 
 	topicsArg := argv[0]

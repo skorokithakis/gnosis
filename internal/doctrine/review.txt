@@ -87,18 +87,18 @@ TIDYING
 
 Stale knowledge is worse than no knowledge. If during your review you
 notice an existing entry that's been superseded by work in this
-session, either remove it ("gnosis rm") or write a new entry that
-references it ("gnosis write ... --related <old-id>") explaining what
+session, either remove it ("gn rm") or write a new entry that
+references it ("gn write ... --related <old-id>") explaining what
 changed. Don't leave contradictions in the system.
 
 WRITING
 
-  gnosis write <topics> "<text>" [--related id,id]
+  gn write <topics> "<text>" [--related id,id]
 
 Topics are comma-separated. Use names that match the system's shape.
 If an entry relates to an existing one, use --related to link them.
 
 Example:
-  gnosis write search-endpoint,caching "We added a 60s TTL cache to
+  gn write search-endpoint,caching "We added a 60s TTL cache to
   search because uncached p99 was 800ms against a 200ms SLA. Stale
   results are acceptable but product wants them under a minute."

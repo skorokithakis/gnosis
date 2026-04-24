@@ -12,7 +12,7 @@ import (
 // dangling Related references; stdout receives the removed IDs.
 func Remove(store *storage.Store, argv []string, stdout io.Writer, stderr io.Writer) error {
 	if len(argv) == 0 {
-		return fmt.Errorf("usage: gnosis rm <id> [<id>...]")
+		return fmt.Errorf("usage: gn rm <id> [<id>...]")
 	}
 
 	// Read entries once before the lock to validate the requested IDs. We
