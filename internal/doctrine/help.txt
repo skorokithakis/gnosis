@@ -10,14 +10,29 @@ to be broken, and what people intend to change but haven't yet.
 gnosis records these intangibles so they survive context switches,
 personnel changes, and the passage of time.
 
-WHAT TO RECORD
+PREFER A CODE COMMENT FIRST
 
-  - A decision and the reasoning behind it.
-  - An alternative that was considered and rejected.
-  - Something known to be flawed or fragile.
+When a piece of "why" attaches to a specific line, function, or file,
+a comment right next to the code is almost always the better home.
+The person at risk of undoing a non-obvious decision is the one
+editing that line — they will see a comment, but they won't think to
+search gnosis first.
+
+Before writing a gnosis entry, ask: does this have an obvious code
+anchor? If yes, make it a comment. Reach for gnosis only when the
+knowledge has no such anchor — it spans multiple files, lives outside
+the code entirely, or concerns something that was considered and not
+built.
+
+WHAT TO RECORD IN GNOSIS
+
+  - A cross-cutting decision that shaped several parts of the system.
+  - An alternative that was considered and rejected (and so has no
+    code to attach a comment to).
   - An intent to change something that hasn't happened yet.
-  - A constraint that shaped a design in a non-obvious way.
-  - A lesson learned the hard way.
+  - A non-obvious constraint from outside the code — a vendor quirk,
+    a regulatory requirement, an operational gotcha.
+  - A lesson learned the hard way that isn't pinned to one spot.
 
 WHAT NOT TO RECORD
 
@@ -26,6 +41,7 @@ don't put it here. Duplication rots. The value of gnosis is that it
 holds what isn't written anywhere else.
 
 Don't record:
+  - A "why" that belongs as a comment on a specific line or function.
   - How a function works (that's what the code is for).
   - API contracts or configuration (that's documentation).
   - TODOs that belong in a ticket tracker.

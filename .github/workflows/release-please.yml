@@ -24,6 +24,11 @@ jobs:
 
   build:
     needs: release-please
+    # Explicit '== true' comparison is required, not a truthy check.
+    # release-please emits the literal string "false" through job-level
+    # outputs on non-release pushes, and GitHub Actions treats any
+    # non-empty string as truthy — so a bare truthy check would run this
+    # job on every push to main and fail uploading to an empty tag.
     if: needs.release-please.outputs.release_created == 'true'
     runs-on: ubuntu-latest
     strategy:

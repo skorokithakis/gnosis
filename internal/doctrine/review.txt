@@ -4,18 +4,35 @@ You've finished work. Before committing, review the session for
 intangibles that should be recorded. This guide helps you decide
 what's worth capturing and what isn't.
 
+CODE COMMENT OR GNOSIS ENTRY?
+
+For each candidate, first ask whether it has an obvious code anchor —
+a specific line, function, or file where someone editing the code
+would see it. If yes, it belongs as a comment there, not here. The
+person most likely to undo a non-obvious decision is the one editing
+that line; they'll read a comment but won't think to search gnosis.
+
+Reach for gnosis only when the knowledge has no such anchor: it spans
+multiple files, concerns something that was considered and not built,
+or lives outside the code (vendor behavior, operational gotchas,
+future intent).
+
 WHAT TO LOOK FOR
 
 Scan the session for moments where:
-  - A direction was chosen over alternatives, and the reasoning
-    matters.
+  - A cross-cutting direction was chosen over alternatives, and the
+    reasoning matters across more than one place in the code.
   - An idea was explicitly rejected — and someone might try it again
-    without knowing why it was ruled out.
-  - A pain point or known flaw was mentioned in passing.
+    without knowing why it was ruled out. (There's no code to comment
+    on, because the code was never written.)
+  - A pain point or known flaw was mentioned in passing that doesn't
+    pin to one spot.
   - Someone expressed intent to change something later.
-  - A non-obvious constraint came up that shaped the implementation.
+  - A non-obvious external constraint came up that shaped the
+    implementation.
   - Something was learned about the system's behavior that isn't
-    captured in the code that was written.
+    captured in the code that was written and doesn't have a natural
+    home as a comment.
 
 RECORD OR NOT?
 
@@ -39,7 +56,14 @@ RECORD OR NOT?
 
   "The integration tests hit a real Stripe sandbox — don't parallelize
   them or you'll get rate-limited and they'll flake."
-  → Yes. Hard-won operational knowledge.
+  → Yes. Hard-won operational knowledge that spans the whole suite
+    and has no single line to attach to.
+
+  "This if-check uses '== true' instead of a truthy test because the
+  upstream action emits the literal string 'false', which Actions
+  treats as truthy."
+  → No — make it a comment on that line. The person who'd "simplify"
+    it is editing that exact line; a gnosis entry won't catch them.
 
   "I added a cache to the search endpoint."
   → No. The code shows this.
