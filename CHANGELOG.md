@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.5.0](https://github.com/skorokithakis/gnosis/compare/v0.4.0...v0.5.0) (2026-04-24)
+
+
+### Features
+
+* add Homebrew tap support to goreleaser ([8785033](https://github.com/skorokithakis/gnosis/commit/8785033f1cc6423cdd72799e15b6d4e3a3d28f08))
+* Highlight search results with bold red formatting ([cf4e53f](https://github.com/skorokithakis/gnosis/commit/cf4e53f8e8320dc536ba7719bf1e20101e2c8f03))
+
 ## [0.4.0](https://github.com/skorokithakis/gnosis/compare/v0.3.0...v0.4.0) (2026-04-24)
 
 
