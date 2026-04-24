@@ -1,51 +1,40 @@
 # gnosis
 
-A knowledge base for what the code can't tell you.
+Your AI agents start from zero every session. gnosis gives them knowledge.
 
-Code documents what a system does, documentation describes how to use it, but there's a third kind of knowledge that neither captures: why things are the way they are, what was tried and abandoned, what's known to be broken, and what people intend to change but haven't yet. This context lives in people's heads, gets lost in Slack threads, and evaporates when someone leaves the team. gnosis gives it a home: a searchable, structured record of decisions, rejected alternatives, known pain points, and design intent that survives context switches and the passage of time.
+Add two lines to your AGENTS.md and every agent session searches existing memory before implementing, records decisions as it goes, and builds on what previous sessions learned. Decisions, rejected alternatives, constraints, and intent accumulate in a searchable knowledge base that lives in your repo and ships with your code.
 
-## Why gnosis instead of ADRs, wikis, or code comments?
+## How it works
 
-- **Searchable** — full-text search with stemming, not grep through markdown files.
-- **Granular** — one entry per decision, not one document per quarter.
-- **Agent-native** — AI coding agents can search existing knowledge before implementing and record decisions as they go, so context survives across sessions.
-- **No infrastructure** — entries are JSONL files in your repo. No server, no database to manage, no sync to configure. It ships with your code in git.
+gnosis stores entries as JSONL in a `.gnosis` directory at your repo root, with a SQLite FTS5 index for full-text search. Agents interact through a small CLI (`gn`) that supports a three-phase loop: search for existing knowledge before implementing, record decisions as they happen, and review what should be captured after finishing.
 
-## Installation
-
-Download a pre-built binary from the [releases page](https://github.com/skorokithakis/gnosis/releases), or install with Go:
-
-```sh
-go install github.com/skorokithakis/gnosis/cmd/gn@latest
-```
-
-## Quick start
-
-```sh
-# Record a decision
-gn write auth,tokens "We use short-lived JWTs rather than sessions because
-the service is stateless by design. Sessions were considered and rejected
-due to the complexity of distributed session storage."
-
-# Before touching an area, search for existing knowledge
-gn search auth token expiry
-
-# Show everything recorded under a topic
-gn show auth
-
-# See all topics and how many entries each has
-gn topics
-```
-
-## For AI coding agents
-
-gnosis is designed to work with AI coding agents. Agents lose context between sessions — they don't know why you chose Postgres over DynamoDB, why that endpoint is deliberately slow, or what was tried and failed last month. gnosis gives them a way to check before they redo your work.
-
-Add this to your agent's system prompt or AGENTS.md:
+To enable this for every agent that touches your repo (Claude Code, Cursor, opencode, Aider) add two lines to your AGENTS.md:
 
 ```
 At the start of any task, run `gn help plan` and follow its instructions.
 After finishing a task, run `gn help review`.
 ```
 
-This gives the agent a three-step loop: search existing knowledge before implementing, write entries when decisions are made, and review what should be recorded after finishing.
+## Why this matters
+
+Code documents what a system does and documentation describes how to use it, but neither captures why things are the way they are, what was tried and abandoned, or what's known to be broken. This context lives in people's heads, gets lost in Slack threads, and evaporates when someone leaves the team or switches to a different project.
+
+Humans have never been good at fixing this (they don't remember to write things down, and when they do it's inconsistent and eventually goes stale). Agents, on the other hand, follow instructions every time, which means they can reliably build up a knowledge base that grows with every session and stays useful without anyone having to maintain it.
+
+## Installation
+
+On macOS, install with Homebrew:
+
+```sh
+brew install --cask skorokithakis/tap/gnosis
+```
+
+On other platforms, download a pre-built binary from the [releases page](https://github.com/skorokithakis/gnosis/releases), or install with Go:
+
+```sh
+go install github.com/skorokithakis/gnosis/cmd/gn@latest
+```
+
+## See it in action
+
+This repo uses gnosis on itself. Browse the [.gnosis directory](.gnosis/) to see the kind of knowledge that accumulates: decisions with their reasoning, rejected alternatives, known flaws and why they haven't been fixed yet, and intent about what's planned but not yet done.
