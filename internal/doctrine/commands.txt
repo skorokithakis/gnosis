@@ -1,0 +1,23 @@
+COMMANDS
+
+  gn help                Show a short overview and the command list.
+  gn help plan           Doctrine for planning — read before starting work.
+  gn help review         Guidance for reviewing a session — read after
+                             finishing work, before writing entries.
+  gn write <topics> <text> [--related id,id]
+                             Record an entry. Topics are comma-separated.
+  gn search <query>      Search entries by keyword.
+  gn show <id|topic>     Show one entry or all entries for a topic.
+  gn topics              List all topics with entry counts.
+  gn edit <id>           Edit an entry in $EDITOR.
+  gn rm <id> [id...]     Remove entries.
+  gn reindex             Rebuild the search index.
+
+Entries are identified by short IDs (six lowercase letters), printed
+when you create them. Each entry tracks when it was created and last
+updated.
+
+Anywhere a command takes an ID, you can pass any unique prefix of
+that ID instead — a single character is fine as long as it's
+unambiguous. If the prefix matches more than one entry, the command
+will error and list the candidates.

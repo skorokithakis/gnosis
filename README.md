@@ -33,15 +33,15 @@ gn topics
 > **Add this to your agent's system prompt:**
 >
 > ```
-> At the start of any session, run `gn help` and follow its instructions. After
-> finishing a task, run `gn help review`.
+> At the start of any task, run `gn help plan` and follow its instructions.
+> After finishing a task, run `gn help review`.
 > ```
 
-`gn help` is the entry point — it describes three touchpoints: searching existing knowledge before implementing, writing entries immediately when decisions are made, and reading `gn help review` after finishing. The second command in the snippet above is a belt-and-suspenders reminder so the review criteria are fresh in context right when the agent needs them.
+`gn help plan` describes three touchpoints: searching existing knowledge before implementing, writing entries immediately when decisions are made, and reading `gn help review` after finishing. The second command in the snippet above is a belt-and-suspenders reminder so the review criteria are fresh in context right when the agent needs them.
 
 ## Full documentation
 
-Run `gn help` for the full doctrine, and `gn help review` for guidance on recording knowledge after a session.
+Run `gn help plan` for the full doctrine, and `gn help review` for guidance on recording knowledge after a session. `gn help` by itself prints a short overview and the command list.
 
 ## License
 

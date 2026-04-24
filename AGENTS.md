@@ -39,7 +39,7 @@ Entries are JSONL on disk with a SQLite FTS5 search index.
 
 ## Agent workflow
 
-Follow the doctrine in `gn help`:
+Follow the doctrine in `gn help plan`:
 1. Before implementing, run `gn search <keywords>` and surface any
    conflicting recorded decisions.
 2. Record decisions as they happen with `gn write`.

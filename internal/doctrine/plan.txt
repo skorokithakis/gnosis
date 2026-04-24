@@ -1,0 +1,95 @@
+gnosis plan — doctrine for planning work with gnosis
+
+PURPOSE
+
+Code documents what a system does, documentation describes how to use
+it, but there's a third kind of knowledge that neither captures: why
+things are the way they are, what was tried and abandoned, what's known
+to be broken, and what people intend to change but haven't yet.
+
+gnosis records these intangibles so they survive context switches,
+personnel changes, and the passage of time.
+
+PREFER A CODE COMMENT FIRST
+
+When a piece of "why" attaches to a specific line, function, or file,
+a comment right next to the code is almost always the better home.
+The person at risk of undoing a non-obvious decision is the one
+editing that line — they will see a comment, but they won't think to
+search gnosis first.
+
+Before writing a gnosis entry, ask: does this have an obvious code
+anchor? If yes, make it a comment. Reach for gnosis only when the
+knowledge has no such anchor — it spans multiple files, lives outside
+the code entirely, or concerns something that was considered and not
+built.
+
+WHAT TO RECORD IN GNOSIS
+
+  - A cross-cutting decision that shaped several parts of the system.
+  - An alternative that was considered and rejected (and so has no
+    code to attach a comment to).
+  - An intent to change something that hasn't happened yet.
+  - A non-obvious constraint from outside the code — a vendor quirk,
+    a regulatory requirement, an operational gotcha.
+  - A lesson learned the hard way that isn't pinned to one spot.
+
+WHAT NOT TO RECORD
+
+If someone reading the code or existing documentation would learn it,
+don't put it here. Duplication rots. The value of gnosis is that it
+holds what isn't written anywhere else.
+
+Don't record:
+  - A "why" that belongs as a comment on a specific line or function.
+  - How a function works (that's what the code is for).
+  - API contracts or configuration (that's documentation).
+  - TODOs that belong in a ticket tracker.
+  - Anything that will be stale in a week — that's status, not
+    knowledge.
+
+THE AGENT LOOP
+
+If you are an AI agent, gnosis has three touchpoints in your workflow:
+
+1. After planning, before implementing:
+   You've read the task and laid out a plan. Before writing any code,
+   run "gn search" with keywords from your plan — system names,
+   feature areas, technical concepts you're about to touch.
+
+   Read what comes back. If any recorded decision conflicts with your
+   plan, surface it to the user before proceeding. The recorded
+   decision may still hold, may be stale, or may need explicit
+   supersession — but don't silently contradict it.
+
+2. During work:
+   If a decision is made or an alternative is explicitly rejected,
+   record it immediately with "gn write" rather than waiting for
+   the end of the session. Context may be lost before you get to the
+   review step.
+
+3. After finishing work:
+   Run "gn help review" and follow its guidance.
+
+TIDYING
+
+Stale knowledge is worse than no knowledge. When a recorded decision
+is overturned, either remove the old entry ("gn rm") or write a
+new one that references it ("gn write ... --related <old-id>")
+explaining what changed. Don't leave contradictions in the system.
+
+TOPICS
+
+Entries are tagged with one or more topics — free-form labels like
+"KeymasterTokenAuth" or "billing-reconciliation". Topics are:
+  - Created on first use. No declaration needed.
+  - Case and separator insensitive on lookup.
+    "KeymasterTokenAuth", "keymaster-token-auth", and
+    "keymaster_token_auth" all resolve to the same topic.
+  - Displayed in normalized form (lowercase, dashes between words).
+
+Use topics that match the system's shape: subsystem names, feature
+areas, service names. They'll evolve as the codebase does.
+
+Topics must be at least seven characters after normalization, so that
+they can't be confused with an ID prefix.

@@ -14,21 +14,31 @@ func notImplemented(command string) {
 	os.Exit(1)
 }
 
+// printHelp prints a doctrine body followed by the shared commands
+// reference, so every help surface ends with the command list.
+func printHelp(body string) {
+	fmt.Print(body)
+	fmt.Println()
+	fmt.Print(doctrine.Commands)
+}
+
 func main() {
 	if len(os.Args) < 2 {
-		fmt.Print(doctrine.Help)
+		printHelp(doctrine.Help)
 		return
 	}
 
 	switch os.Args[1] {
 	case "help":
 		if len(os.Args) < 3 {
-			fmt.Print(doctrine.Help)
+			printHelp(doctrine.Help)
 			return
 		}
 		switch os.Args[2] {
+		case "plan":
+			printHelp(doctrine.Plan)
 		case "review":
-			fmt.Print(doctrine.Review)
+			printHelp(doctrine.Review)
 		default:
 			fmt.Fprintf(os.Stderr, "gn: unknown help topic %q\n", os.Args[2])
 			os.Exit(1)
