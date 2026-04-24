@@ -47,6 +47,7 @@ jobs:
           args: release --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          HOMEBREW_TAP_GITHUB_TOKEN: ${{ secrets.HOMEBREW_TAP_GITHUB_TOKEN }}
           # The workflow runs on the main branch, not on the tag ref, so
           # goreleaser cannot detect the current tag automatically. Passing it
           # explicitly via this env var is the supported workaround.

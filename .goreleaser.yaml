@@ -23,6 +23,27 @@ archives:
 checksum:
   name_template: checksums.txt
 
+homebrew_casks:
+  - name: gnosis
+    homepage: https://github.com/skorokithakis/gnosis
+    description: A knowledge base for what the code can't tell you.
+    # The binary inside the archive is named 'gn', not 'gnosis'.
+    binaries:
+      - gn
+    # Remove the quarantine bit so macOS doesn't block an unsigned binary.
+    hooks:
+      post:
+        install: |
+          if OS.mac?
+            system_command "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "#{staged_path}/gn"]
+          end
+    repository:
+      # Requires a HOMEBREW_TAP_GITHUB_TOKEN secret in the gnosis repo with
+      # write access to the tap repo.
+      owner: skorokithakis
+      name: homebrew-tap
+      token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
+
 changelog:
   # release-please owns the changelog and release notes; goreleaser must not
   # generate its own or it will overwrite what release-please wrote.
