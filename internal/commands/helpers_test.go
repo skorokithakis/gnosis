@@ -11,7 +11,7 @@ import (
 // newTestStore creates a Store backed by a temporary directory.
 func newTestStore(t *testing.T) *storage.Store {
 	t.Helper()
-	store, err := storage.NewStoreAt(filepath.Join(t.TempDir(), ".gnosis"))
+	store, err := storage.NewStoreAt(filepath.Join(t.TempDir(), ".gnosis"), t.TempDir())
 	if err != nil {
 		t.Fatalf("NewStoreAt: %v", err)
 	}

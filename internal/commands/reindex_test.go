@@ -16,7 +16,7 @@ import (
 func newTestStoreWithRoot(t *testing.T) (*storage.Store, string) {
 	t.Helper()
 	repoRoot := t.TempDir()
-	store, err := storage.NewStoreAt(filepath.Join(repoRoot, ".gnosis"))
+	store, err := storage.NewStoreAt(filepath.Join(repoRoot, ".gnosis"), t.TempDir())
 	if err != nil {
 		t.Fatalf("NewStoreAt: %v", err)
 	}

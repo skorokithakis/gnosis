@@ -12,6 +12,8 @@ import (
 	"syscall"
 	"time"
 	"unicode"
+
+	"github.com/skorokithakis/gnosis/internal/paths"
 )
 
 // alphabet is the set of lowercase letters used for ID generation. The letters
@@ -37,28 +39,51 @@ type Entry struct {
 	UpdatedAt time.Time `json:"updated_at"`
 }
 
+// staleLockCutoff is the date after which the opportunistic cleanup of the old
+// .gnosis/.lock file is skipped entirely. The lock file moved out of the repo
+// on 2026-04-25 and nobody but the author was running gn before then, so the
+// cleanup window only needs to cover a short migration period.
+//
+// TODO: remove this stale-lock cleanup after 2026-07-01; the lock file moved
+// out of the repo on 2026-04-25 and nobody but the author was running gn
+// before then.
+var staleLockCutoff = time.Date(2026, 7, 1, 0, 0, 0, 0, time.UTC)
+
 // Store holds the resolved path to the .gnosis directory and provides all
 // storage operations. Callers obtain a Store via NewStore.
 type Store struct {
 	gnosisDir string
+	cacheDir  string
 }
 
 // NewStore resolves the repo root (by walking up from the current working
 // directory) and returns a Store pointing at the .gnosis directory within it.
-// The directory is not created here; it is created on first write.
+// The .gnosis directory is not created here; it is created on first write.
+// The cache directory (for the lock file and index.db) is derived from the
+// repo root via paths.CacheDir.
 func NewStore() (*Store, error) {
 	root, err := FindRepoRoot()
 	if err != nil {
 		return nil, err
 	}
-	return &Store{gnosisDir: filepath.Join(root, ".gnosis")}, nil
+	cacheDir, err := paths.CacheDir(root)
+	if err != nil {
+		return nil, fmt.Errorf("resolving cache directory: %w", err)
+	}
+	store := &Store{
+		gnosisDir: filepath.Join(root, ".gnosis"),
+		cacheDir:  cacheDir,
+	}
+	store.removeStaleRepoLock()
+	return store, nil
 }
 
-// NewStoreAt returns a Store that uses the given directory as its .gnosis
-// directory. This is intended for tests that need to point the store at a
-// temporary directory rather than the real repo root.
-func NewStoreAt(gnosisDir string) (*Store, error) {
-	return &Store{gnosisDir: gnosisDir}, nil
+// NewStoreAt returns a Store that uses gnosisDir as its .gnosis directory and
+// cacheDir as the directory for the lock file (and index.db). This is intended
+// for tests that need to point the store at temporary directories rather than
+// the real repo root.
+func NewStoreAt(gnosisDir, cacheDir string) (*Store, error) {
+	return &Store{gnosisDir: gnosisDir, cacheDir: cacheDir}, nil
 }
 
 // GnosisDir returns the path to the .gnosis directory this store uses.
@@ -72,13 +97,20 @@ func (store *Store) entriesPath() string {
 }
 
 // lockPath returns the path to the flock file used to serialise rewrites.
+// The lock file lives in the cache directory (alongside index.db), not in the
+// repo, because it is purely runtime coordination state.
 func (store *Store) lockPath() string {
-	return filepath.Join(store.gnosisDir, ".lock")
+	return filepath.Join(store.cacheDir, "lock")
 }
 
 // ensureDir creates the .gnosis directory if it does not already exist.
 func (store *Store) ensureDir() error {
 	return os.MkdirAll(store.gnosisDir, 0o755)
+}
+
+// ensureCacheDir creates the cache directory if it does not already exist.
+func (store *Store) ensureCacheDir() error {
+	return os.MkdirAll(store.cacheDir, 0o755)
 }
 
 // openLockFile opens (or creates) the lock file and returns it. The caller is
@@ -87,13 +119,28 @@ func (store *Store) openLockFile() (*os.File, error) {
 	return os.OpenFile(store.lockPath(), os.O_WRONLY|os.O_CREATE, 0o644)
 }
 
+// removeStaleRepoLock opportunistically removes the old .gnosis/.lock file
+// that existed before the lock was moved to the cache directory. Errors are
+// silently ignored because the file is no longer used and its absence is the
+// desired state.
+//
+// TODO: remove this stale-lock cleanup after 2026-07-01; the lock file moved
+// out of the repo on 2026-04-25 and nobody but the author was running gn
+// before then.
+func (store *Store) removeStaleRepoLock() {
+	if time.Now().After(staleLockCutoff) {
+		return
+	}
+	os.Remove(filepath.Join(store.gnosisDir, ".lock")) //nolint:errcheck
+}
+
 // withSharedLock opens the lock file, acquires a shared flock, calls fn, then
 // releases the lock and closes the file. A shared lock allows concurrent
-// readers and appenders but blocks exclusive (rewrite) lockers. The .gnosis
+// readers and appenders but blocks exclusive (rewrite) lockers. The cache
 // directory is created if it does not exist, because the lock file lives there.
 func (store *Store) withSharedLock(fn func() error) error {
-	if err := store.ensureDir(); err != nil {
-		return fmt.Errorf("creating .gnosis directory: %w", err)
+	if err := store.ensureCacheDir(); err != nil {
+		return fmt.Errorf("creating cache directory: %w", err)
 	}
 
 	lockFile, err := store.openLockFile()
@@ -112,11 +159,11 @@ func (store *Store) withSharedLock(fn func() error) error {
 
 // withExclusiveLock opens the lock file, acquires an exclusive flock, calls
 // fn, then releases the lock and closes the file. An exclusive lock blocks all
-// other lockers (both shared and exclusive) until it is released. The .gnosis
+// other lockers (both shared and exclusive) until it is released. The cache
 // directory is created if it does not exist, because the lock file lives there.
 func (store *Store) withExclusiveLock(fn func() error) error {
-	if err := store.ensureDir(); err != nil {
-		return fmt.Errorf("creating .gnosis directory: %w", err)
+	if err := store.ensureCacheDir(); err != nil {
+		return fmt.Errorf("creating cache directory: %w", err)
 	}
 
 	lockFile, err := store.openLockFile()
@@ -134,8 +181,8 @@ func (store *Store) withExclusiveLock(fn func() error) error {
 }
 
 // Append normalizes all topics on entry, then serialises it as a single JSON
-// line and appends it to the entries file. A shared flock on .gnosis/.lock is
-// held for the duration of the write so that concurrent Rewrite calls (which
+// line and appends it to the entries file. A shared flock on <cache-dir>/lock
+// is held for the duration of the write so that concurrent Rewrite calls (which
 // take an exclusive lock) cannot rename the file out from under us mid-write.
 // O_APPEND is used so that concurrent appenders are line-atomic on Linux (a
 // single write of less than PIPE_BUF bytes is guaranteed to be atomic).
@@ -269,7 +316,7 @@ func (store *Store) readAllUnlocked() ([]Entry, error) {
 }
 
 // Rewrite atomically replaces the entire entries file with the given slice.
-// It acquires an exclusive flock on .gnosis/.lock before writing so that
+// It acquires an exclusive flock on <cache-dir>/lock before writing so that
 // concurrent appenders cannot interleave with the rename. The write goes to a
 // temp file in the same directory so that the final rename is atomic on Linux.
 func (store *Store) Rewrite(entries []Entry) error {
@@ -349,8 +396,8 @@ func (store *Store) Update(transform func([]Entry) []Entry) error {
 	})
 }
 
-// WithSharedLock acquires a shared flock on .gnosis/.lock and calls fn while
-// holding it. This allows callers outside the storage package to perform
+// WithSharedLock acquires a shared flock on <cache-dir>/lock and calls fn
+// while holding it. This allows callers outside the storage package to perform
 // multiple operations atomically under the same shared lock — for example,
 // reading entries and then stat-ing the file mtime in a single critical section.
 func (store *Store) WithSharedLock(fn func() error) error {

@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/skorokithakis/gnosis/internal/commands"
+	"github.com/skorokithakis/gnosis/internal/paths"
 	"github.com/skorokithakis/gnosis/internal/storage"
 )
 
@@ -17,8 +18,7 @@ import (
 func newSearchTestStore(t *testing.T) *storage.Store {
 	t.Helper()
 	storeDir := t.TempDir()
-	cacheDir := t.TempDir()
-	t.Setenv("XDG_CACHE_HOME", cacheDir)
+	t.Setenv("XDG_CACHE_HOME", t.TempDir())
 
 	// FindRepoRoot walks up from the working directory looking for .gnosis, so
 	// we place the .gnosis directory inside storeDir and change the working
@@ -37,7 +37,14 @@ func newSearchTestStore(t *testing.T) *storage.Store {
 	}
 	t.Cleanup(func() { os.Chdir(original) }) //nolint:errcheck
 
-	store, err := storage.NewStoreAt(gnosisDir)
+	// Derive the per-repo cache subdirectory via paths.CacheDir so the
+	// store's lock file lands in the same hashed directory that index.Open
+	// will use when Search calls FindRepoRoot (which resolves to storeDir).
+	storeCacheDir, err := paths.CacheDir(storeDir)
+	if err != nil {
+		t.Fatalf("paths.CacheDir: %v", err)
+	}
+	store, err := storage.NewStoreAt(gnosisDir, storeCacheDir)
 	if err != nil {
 		t.Fatalf("NewStoreAt: %v", err)
 	}

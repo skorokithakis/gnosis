@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/skorokithakis/gnosis/internal/index"
+	"github.com/skorokithakis/gnosis/internal/paths"
 	"github.com/skorokithakis/gnosis/internal/storage"
 )
 
@@ -18,7 +19,17 @@ func newTestIndex(t *testing.T, entries []storage.Entry) (*index.Index, *storage
 
 	storeDir := t.TempDir()
 	gnosisDir := filepath.Join(storeDir, ".gnosis")
-	store, err := storage.NewStoreAt(gnosisDir)
+	// Use a separate temp directory as XDG_CACHE_HOME so the test never
+	// touches the real user cache. Derive the per-repo cache subdirectory via
+	// paths.CacheDir so the store's lock file lands in the same hashed
+	// directory that index.Open will use.
+	xdgCacheHome := t.TempDir()
+	t.Setenv("XDG_CACHE_HOME", xdgCacheHome)
+	storeCacheDir, err := paths.CacheDir(storeDir)
+	if err != nil {
+		t.Fatalf("paths.CacheDir: %v", err)
+	}
+	store, err := storage.NewStoreAt(gnosisDir, storeCacheDir)
 	if err != nil {
 		t.Fatalf("NewStoreAt: %v", err)
 	}
@@ -28,11 +39,6 @@ func newTestIndex(t *testing.T, entries []storage.Entry) (*index.Index, *storage
 			t.Fatalf("Append entry %q: %v", entry.ID, err)
 		}
 	}
-
-	// Use a separate temp directory as XDG_CACHE_HOME so the test never
-	// touches the real user cache.
-	cacheDir := t.TempDir()
-	t.Setenv("XDG_CACHE_HOME", cacheDir)
 
 	// repoRoot is the parent of .gnosis, which is storeDir.
 	idx, err := index.Open(storeDir, store)

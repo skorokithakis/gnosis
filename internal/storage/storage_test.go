@@ -12,13 +12,119 @@ import (
 	"github.com/skorokithakis/gnosis/internal/storage"
 )
 
+// --- Lock file location ---
+
+// TestLockFile_lands_in_cacheDir verifies that after a write operation the lock
+// file exists under cacheDir (not under gnosisDir).
+func TestLockFile_lands_in_cacheDir(t *testing.T) {
+	gnosisDir := filepath.Join(t.TempDir(), ".gnosis")
+	cacheDir := t.TempDir()
+	store, err := storage.NewStoreAt(gnosisDir, cacheDir)
+	if err != nil {
+		t.Fatalf("NewStoreAt: %v", err)
+	}
+
+	if err := store.Append(sampleEntry("aaaaaa")); err != nil {
+		t.Fatalf("Append: %v", err)
+	}
+
+	// The lock file must exist in cacheDir.
+	lockPath := filepath.Join(cacheDir, "lock")
+	if _, err := os.Stat(lockPath); err != nil {
+		t.Errorf("expected lock file at %q, got error: %v", lockPath, err)
+	}
+
+	// The old location inside gnosisDir must not exist.
+	oldLockPath := filepath.Join(gnosisDir, ".lock")
+	if _, err := os.Stat(oldLockPath); err == nil {
+		t.Errorf("lock file must not exist at old location %q", oldLockPath)
+	}
+}
+
+// --- Stale-lock cleanup ---
+
+// TestRemoveStaleRepoLock_removes_before_cutoff verifies that
+// RemoveStaleRepoLock deletes <gnosisDir>/.lock when called before the cutoff.
+func TestRemoveStaleRepoLock_removes_before_cutoff(t *testing.T) {
+	defer storage.SetStaleLockCutoff(time.Now().Add(24 * time.Hour))()
+
+	gnosisDir := filepath.Join(t.TempDir(), ".gnosis")
+	if err := os.MkdirAll(gnosisDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll: %v", err)
+	}
+	staleLock := filepath.Join(gnosisDir, ".lock")
+	if err := os.WriteFile(staleLock, nil, 0o644); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+
+	store, err := storage.NewStoreAt(gnosisDir, t.TempDir())
+	if err != nil {
+		t.Fatalf("NewStoreAt: %v", err)
+	}
+	store.RemoveStaleRepoLock()
+
+	if _, err := os.Stat(staleLock); err == nil {
+		t.Errorf("stale lock file should have been removed but still exists at %q", staleLock)
+	}
+}
+
+// TestRemoveStaleRepoLock_skips_after_cutoff verifies that RemoveStaleRepoLock
+// leaves <gnosisDir>/.lock untouched when called after the cutoff.
+func TestRemoveStaleRepoLock_skips_after_cutoff(t *testing.T) {
+	defer storage.SetStaleLockCutoff(time.Now().Add(-24 * time.Hour))()
+
+	gnosisDir := filepath.Join(t.TempDir(), ".gnosis")
+	if err := os.MkdirAll(gnosisDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll: %v", err)
+	}
+	staleLock := filepath.Join(gnosisDir, ".lock")
+	if err := os.WriteFile(staleLock, nil, 0o644); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+
+	store, err := storage.NewStoreAt(gnosisDir, t.TempDir())
+	if err != nil {
+		t.Fatalf("NewStoreAt: %v", err)
+	}
+	store.RemoveStaleRepoLock()
+
+	if _, err := os.Stat(staleLock); err != nil {
+		t.Errorf("stale lock file should not have been removed after cutoff, but got: %v", err)
+	}
+}
+
+// --- gnosisDir not created by read-only operations ---
+
+// TestReadAll_does_not_create_gnosisDir verifies that ReadAll on a fresh store
+// (no entries file) does not create the .gnosis directory. The directory should
+// only be created when something is actually written to entries.jsonl.
+func TestReadAll_does_not_create_gnosisDir(t *testing.T) {
+	gnosisDir := filepath.Join(t.TempDir(), ".gnosis")
+	store, err := storage.NewStoreAt(gnosisDir, t.TempDir())
+	if err != nil {
+		t.Fatalf("NewStoreAt: %v", err)
+	}
+
+	entries, err := store.ReadAll()
+	if err != nil {
+		t.Fatalf("ReadAll: %v", err)
+	}
+	if len(entries) != 0 {
+		t.Fatalf("expected 0 entries, got %d", len(entries))
+	}
+
+	if _, err := os.Stat(gnosisDir); err == nil {
+		t.Errorf("ReadAll must not create gnosisDir %q", gnosisDir)
+	}
+}
+
 // newTestStore creates a Store backed by a temporary directory and returns both
 // the store and a cleanup function. Using a temp directory isolates each test
 // from the real filesystem and from other tests.
 func newTestStore(t *testing.T) *storage.Store {
 	t.Helper()
 	tempDir := t.TempDir()
-	store, err := storage.NewStoreAt(filepath.Join(tempDir, ".gnosis"))
+	store, err := storage.NewStoreAt(filepath.Join(tempDir, ".gnosis"), t.TempDir())
 	if err != nil {
 		t.Fatalf("NewStoreAt: %v", err)
 	}

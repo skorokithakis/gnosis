@@ -1,7 +1,6 @@
 package index
 
 import (
-	"crypto/sha256"
 	"database/sql"
 	"fmt"
 	"os"
@@ -11,6 +10,7 @@ import (
 
 	_ "modernc.org/sqlite"
 
+	"github.com/skorokithakis/gnosis/internal/paths"
 	"github.com/skorokithakis/gnosis/internal/storage"
 )
 
@@ -30,31 +30,10 @@ type Index struct {
 	dbPath string
 }
 
-// cacheDir returns the directory that should hold the index database for the
-// given repo root. It respects XDG_CACHE_HOME; if that variable is unset it
-// falls back to ~/.cache.
-func cacheDir(repoRoot string) (string, error) {
-	base := os.Getenv("XDG_CACHE_HOME")
-	if base == "" {
-		home, err := os.UserHomeDir()
-		if err != nil {
-			return "", fmt.Errorf("resolving home directory: %w", err)
-		}
-		base = filepath.Join(home, ".cache")
-	}
-
-	// Derive a short, stable identifier for this repo so that multiple repos
-	// on the same machine each get their own cache directory without colliding.
-	sum := sha256.Sum256([]byte(repoRoot))
-	repoHash := fmt.Sprintf("%x", sum)[:16]
-
-	return filepath.Join(base, "gnosis", repoHash), nil
-}
-
 // Open opens (or creates) the index database for the repo that owns store.
 // repoRoot must be the absolute path returned by storage.FindRepoRoot.
 func Open(repoRoot string, store *storage.Store) (*Index, error) {
-	dir, err := cacheDir(repoRoot)
+	dir, err := paths.CacheDir(repoRoot)
 	if err != nil {
 		return nil, fmt.Errorf("resolving cache directory: %w", err)
 	}
