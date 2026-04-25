@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.5.1](https://github.com/skorokithakis/gnosis/compare/v0.5.0...v0.5.1) (2026-04-25)
+
+
+### Features
+
+* add terminal-aware text wrapping to show command ([378f6b9](https://github.com/skorokithakis/gnosis/commit/378f6b979182fd7e400e4b7c680db004ce73922a))
+* Move flock file from repository to cache directory ([6dce548](https://github.com/skorokithakis/gnosis/commit/6dce54806f8d013740adf039cb450e24429de316))
+
 ## [0.5.0](https://github.com/skorokithakis/gnosis/compare/v0.4.0...v0.5.0) (2026-04-24)
 
 
