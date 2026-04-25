@@ -29,10 +29,25 @@ The real competition is "nothing." Most teams don't record decisions, rejected a
 
 ## Key risk
 
-Signal-to-noise in agent-written entries. If agents write too much low-value content, the knowledge base becomes noisy and people delete `.gnosis`. If agents write too little, there's nothing to search and the tool appears useless. The doctrine (`gn help plan`, `gn help review`) is the current mechanism for guiding agent behavior, and improving it is an ongoing priority.
+Signal-to-noise in agent-written entries. If agents write too much low-value content, the knowledge base becomes noisy and people delete `.gnosis`. If agents write too little, there's nothing to search and the tool appears useless. The doctrine (`gn help plan`, `gn help review`) is the current mechanism for guiding agent behavior.
+
+## Decisions
+
+### 2026-04-25 — "Record what the human knows, not what you know"
+
+**Decision:** The primary filter for whether an agent should write a gnosis entry is whether the knowledge originated from the human (or from empirical observation), not from the agent's own reasoning about the code. An agent's analysis is reproducible — it'll be there next session. The human's context is perishable.
+
+**Reasoning:** Most noise in agent-written entries comes from agents recording their own analysis as if it were institutional knowledge. A competent agent given the same codebase would reach the same conclusions, making those entries redundant. The irreplaceable value is what the human carries: business context, organizational history, operational lessons, rejected approaches from past experience, and future intent.
+
+**What was considered and rejected:**
+- *Structural enforcement (entry templates, source-attribution fields, validation).* Rejected as premature. The principle is clear enough to guide agent judgment through doctrine alone. If signal-to-noise remains a problem after this change, structural enforcement becomes the next lever to pull.
+- *Hard rule vs. guiding principle.* Went with guiding principle ("strongly prefer") rather than an absolute rule, because the boundary between human knowledge and agent inference has gray areas that require judgment.
+
+**Implementation:** Doctrine-only change to `plan.txt` and `review.txt`. No code changes.
+
+**Resolves:** The signal-to-noise open question below. This is the primary answer — the doctrine now gives agents a sharper filter that should cut the main source of noise (agents recording their own reasoning).
 
 ## Open questions
 
-- **Signal-to-noise optimization.** What makes an agent write a good entry vs. a useless one? Is the current doctrine sufficient, or does it need structural changes (entry templates, validation, quality scoring)?
 - **Cross-repo knowledge.** Should gnosis support knowledge that spans multiple repos (org-wide decisions, shared conventions)? Not yet, but worth tracking as a future direction.
 - **Entry lifecycle.** Do entries go stale? Should there be a mechanism for agents to flag or retire outdated entries?

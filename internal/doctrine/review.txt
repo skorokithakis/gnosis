@@ -4,6 +4,19 @@ You've finished work. Before committing, review the session for
 intangibles that should be recorded. This guide helps you decide
 what's worth capturing and what isn't.
 
+HUMAN KNOWLEDGE, NOT YOURS
+
+The most important filter: record what the human knows, not what you
+know. You'll be here next session with the same reasoning ability and
+the same access to the code. The human might not. Their context —
+business reasons, organizational history, operational lessons, future
+intent — is what's perishable.
+
+Before writing an entry, ask: would a competent agent, given the code
+and docs, reach this conclusion on its own? If yes, skip it. Reach
+for gnosis only when the knowledge originated from the human or from
+empirical observation that isn't reconstructable from the codebase.
+
 CODE COMMENT OR GNOSIS ENTRY?
 
 For each candidate, first ask whether it has an obvious code anchor —
@@ -42,7 +55,8 @@ RECORD OR NOT?
   "We chose Postgres over DynamoDB because we need ad-hoc joins for
   the reporting module, and DynamoDB's query model couldn't support
   that without duplicating data across three tables."
-  → Yes. The reasoning isn't in the code.
+  → Yes, if the human told you this. If you inferred it from the
+    schema, the next agent will too — that entry is noise.
 
   "The user model has a 'role' field."
   → No. Read the code.
@@ -73,6 +87,16 @@ RECORD OR NOT?
   are acceptable for this use case but the product team doesn't want
   them older than a minute."
   → Yes. The constraints and tradeoff reasoning aren't in the code.
+
+  "SQLite is a good fit here because the data is single-writer and
+  the dataset fits in memory."
+  → No. Any agent reading the code would reach the same conclusion.
+    Record what the human told you, not what you figured out.
+
+  "The team tried Redis for this cache last quarter but it added too
+  much operational overhead for a two-person team, so they went back
+  to in-process caching."
+  → Yes. That history isn't in the code and no agent would know it.
 
 BE SELECTIVE
 

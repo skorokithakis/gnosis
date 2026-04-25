@@ -10,6 +10,27 @@ to be broken, and what people intend to change but haven't yet.
 gnosis records these intangibles so they survive context switches,
 personnel changes, and the passage of time.
 
+RECORD WHAT THE HUMAN KNOWS
+
+This is the most important filter for deciding what to record.
+
+You — the agent — will be here next session with the same reasoning
+ability, the same access to the code, and the same general knowledge.
+The human might not. Their context is perishable: business reasons,
+organizational constraints, things they tried last quarter, intent
+they haven't acted on yet, operational lessons from production. If
+they don't tell you and nobody writes it down, it's gone.
+
+Before recording anything, ask: would a competent agent, given the
+code and existing documentation, reach this same conclusion on its
+own? If yes, don't write it down — it's already reproducible. Reach
+for gnosis only when the knowledge originated from the human or from
+empirical observation that can't be reconstructed from the code.
+
+Strongly prefer recording knowledge that came from the human's mouth
+over your own reasoning about the codebase. Your analysis is
+reproducible; their context isn't.
+
 PREFER A CODE COMMENT FIRST
 
 When a piece of "why" attaches to a specific line, function, or file,
@@ -33,6 +54,8 @@ WHAT TO RECORD IN GNOSIS
   - A non-obvious constraint from outside the code — a vendor quirk,
     a regulatory requirement, an operational gotcha.
   - A lesson learned the hard way that isn't pinned to one spot.
+  - Something the human told you that you couldn't have inferred
+    from the codebase alone.
 
 WHAT NOT TO RECORD
 
@@ -47,6 +70,8 @@ Don't record:
   - TODOs that belong in a ticket tracker.
   - Anything that will be stale in a week — that's status, not
     knowledge.
+  - Your own analysis or reasoning about the code. You'll have that
+    again next session; the human's context is what's perishable.
 
 THE AGENT LOOP
 
