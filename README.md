@@ -6,7 +6,11 @@ Add two lines to your AGENTS.md and every agent session searches existing memory
 
 ## How it works
 
-gnosis stores entries as JSONL in a `.gnosis` directory at your repo root, with a SQLite FTS5 index for full-text search. Agents interact through a small CLI (`gn`) that supports a three-phase loop: search for existing knowledge before implementing, record decisions as they happen, and review what should be captured after finishing.
+Agents interact through a small CLI (`gn`) that drives a three-phase loop on every task:
+
+1. **Search** existing knowledge before implementing, so prior decisions, rejected alternatives, and known constraints surface before the agent writes any code.
+2. **Record** decisions as they happen, while the reasoning is still fresh.
+3. **Review** what should be captured after finishing, so nothing important falls through the cracks.
 
 To enable this for every agent that touches your repo (Claude Code, Cursor, opencode, Aider) add two lines to your AGENTS.md:
 
@@ -14,6 +18,8 @@ To enable this for every agent that touches your repo (Claude Code, Cursor, open
 At the start of any task, run `gn help plan` and follow its instructions.
 After finishing a task, run `gn help review`.
 ```
+
+Under the hood, entries are stored as JSONL in a `.gnosis` directory at your repo root, with a SQLite FTS5 index for full-text search.
 
 ## Why this matters
 
