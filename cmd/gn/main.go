@@ -65,6 +65,16 @@ func main() {
 			fmt.Fprintf(os.Stderr, "gn: %v\n", err)
 			os.Exit(1)
 		}
+	case "latest":
+		store, err := storage.NewStore()
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "gn: %v\n", err)
+			os.Exit(1)
+		}
+		if err := commands.Latest(store, os.Args[2:], os.Stdout); err != nil {
+			fmt.Fprintf(os.Stderr, "gn: %v\n", err)
+			os.Exit(1)
+		}
 	case "show":
 		if len(os.Args) < 3 {
 			fmt.Fprintln(os.Stderr, "gn show: missing target argument")

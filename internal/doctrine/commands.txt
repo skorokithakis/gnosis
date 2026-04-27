@@ -7,6 +7,7 @@ COMMANDS
   gn write <topics> <text> [--related id,id]
                              Record an entry. Topics are comma-separated.
   gn search <query>      Search entries by keyword.
+  gn latest [--limit N]  Show the most recently created entries.
   gn show <id|topic>     Show one entry or all entries for a topic.
   gn topics              List all topics with entry counts.
   gn edit <id>           Edit an entry in $EDITOR.
