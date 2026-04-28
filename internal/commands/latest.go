@@ -22,9 +22,9 @@ const snippetMaxRunes = 200
 
 // Latest implements the "gn latest [--limit N]" command. It reads all entries,
 // sorts them newest-first by CreatedAt, and prints up to limit entries in the
-// same columnar format as Search (id, primary topic, text snippet). argv should
-// be os.Args[2:] (everything after "latest"). Output is written to writer so
-// callers and tests can capture it.
+// same columnar format as Search (id, updated date, primary topic, text
+// snippet). argv should be os.Args[2:] (everything after "latest"). Output is
+// written to writer so callers and tests can capture it.
 func Latest(store *storage.Store, argv []string, writer io.Writer) error {
 	limit := defaultLatestLimit
 
@@ -98,9 +98,10 @@ func Latest(store *storage.Store, argv []string, writer io.Writer) error {
 		}
 
 		coloredID := termcolor.UniqueID(entry.ID, allIDs)
+		coloredDate := termcolor.Date(entry.UpdatedAt.Format("2006-01-02"))
 		coloredTopic := termcolor.Topic(primaryTopic)
 		topicPad := strings.Repeat(" ", maxTopicWidth-len(primaryTopic))
-		fmt.Fprintf(writer, "%s  %s%s  %s\n", coloredID, coloredTopic, topicPad, snippet)
+		fmt.Fprintf(writer, "%s  %s  %s%s  %s\n", coloredID, coloredDate, coloredTopic, topicPad, snippet)
 	}
 
 	return nil

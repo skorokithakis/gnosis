@@ -243,6 +243,44 @@ func TestSearch_explicit_operator_passthrough(t *testing.T) {
 	}
 }
 
+// TestSearch_shows_updated_date verifies that the date column (column index 1
+// when splitting on two-space separators) shows UpdatedAt, not CreatedAt.
+// CreatedAt and UpdatedAt are intentionally distinct so the test would catch
+// an implementation that formats the wrong field.
+func TestSearch_shows_updated_date(t *testing.T) {
+	store := newSearchTestStore(t)
+
+	createdAt := time.Date(2024, 1, 10, 0, 0, 0, 0, time.UTC)
+	updatedAt := time.Date(2025, 3, 15, 0, 0, 0, 0, time.UTC)
+	entry := storage.Entry{
+		ID:        "aaaaaa",
+		Topics:    []string{"golang"},
+		Text:      "hello world",
+		Related:   []string{},
+		CreatedAt: createdAt,
+		UpdatedAt: updatedAt,
+	}
+	if err := store.Append(entry); err != nil {
+		t.Fatalf("Append: %v", err)
+	}
+
+	var output strings.Builder
+	if err := commands.Search(store, []string{"hello"}, &output); err != nil {
+		t.Fatalf("Search: %v", err)
+	}
+
+	// Output format (no ANSI in tests): "<id>  <date>  <topic>  <snippet>\n"
+	// Splitting on two-space separators yields columns [id, date, topic, snippet].
+	line := strings.TrimRight(output.String(), "\n")
+	columns := strings.SplitN(line, "  ", 4)
+	if len(columns) != 4 {
+		t.Fatalf("expected 4 columns in output line, got %d: %q", len(columns), line)
+	}
+	if columns[1] != "2025-03-15" {
+		t.Errorf("date column (index 1) = %q, want %q (UpdatedAt); full line: %q", columns[1], "2025-03-15", line)
+	}
+}
+
 // TestSearch_snippet_has_no_newlines verifies that when an entry's text
 // contains embedded newlines, the snippet printed for a matching search result
 // contains no newline characters — preserving the one-entry-per-line output

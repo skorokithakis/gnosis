@@ -132,8 +132,10 @@ func Search(store *storage.Store, argv []string, writer io.Writer) error {
 	for _, hit := range hits {
 		entry, found := entryByID[hit.EntryID]
 		primaryTopic := ""
+		updatedDate := ""
 		if found {
 			primaryTopic = primaryTopicOf(entry)
+			updatedDate = entry.UpdatedAt.Format("2006-01-02")
 		}
 		// Collapse all whitespace runs (including newlines that FTS5's
 		// snippet() may include from the indexed text) to single spaces so
@@ -145,14 +147,15 @@ func Search(store *storage.Store, argv []string, writer io.Writer) error {
 		snippet = termcolor.HighlightMatches(snippet, index.MatchStart, index.MatchEnd)
 
 		// IDs are always 6 bytes, so no id-side padding is needed.
-		// We color the id and topic separately and then append explicit spaces
-		// for the topic column, because fmt.Fprintf's %-*s measures width by
-		// byte length — ANSI escape sequences would inflate the count and
-		// misalign the snippet column.
+		// We color the id, date, and topic separately and then append explicit
+		// spaces for the topic column, because fmt.Fprintf's %-*s measures
+		// width by byte length — ANSI escape sequences would inflate the count
+		// and misalign the snippet column.
 		coloredID := termcolor.UniqueID(hit.EntryID, allIDs)
+		coloredDate := termcolor.Date(updatedDate)
 		coloredTopic := termcolor.Topic(primaryTopic)
 		topicPad := strings.Repeat(" ", maxTopicWidth-len(primaryTopic))
-		fmt.Fprintf(writer, "%s  %s%s  %s\n", coloredID, coloredTopic, topicPad, snippet)
+		fmt.Fprintf(writer, "%s  %s  %s%s  %s\n", coloredID, coloredDate, coloredTopic, topicPad, snippet)
 	}
 
 	return nil

@@ -209,13 +209,13 @@ func TestLatest_snippet_truncated_at_200_runes(t *testing.T) {
 
 	// Extract the snippet portion (everything after the two-space gap following
 	// the topic column) and verify it is exactly 200 runes + the ellipsis.
-	// The output line format is: "<id>  <topic>  <snippet>\n"
+	// The output line format is: "<id>  <date>  <topic>  <snippet>\n"
 	// Split on the double-space that precedes the snippet.
-	parts := strings.SplitN(strings.TrimRight(result, "\n"), "  ", 3)
-	if len(parts) != 3 {
+	parts := strings.SplitN(strings.TrimRight(result, "\n"), "  ", 4)
+	if len(parts) != 4 {
 		t.Fatalf("unexpected output format: %q", result)
 	}
-	snippetRunes := []rune(parts[2])
+	snippetRunes := []rune(parts[3])
 	// Last rune must be the ellipsis; the preceding 200 runes are the text.
 	if snippetRunes[len(snippetRunes)-1] != '…' {
 		t.Errorf("last rune of snippet should be ellipsis, got %q", string(snippetRunes[len(snippetRunes)-1]))
@@ -236,6 +236,42 @@ func TestLatest_snippet_truncated_at_200_runes(t *testing.T) {
 	}
 	if strings.Contains(output2.String(), "…") {
 		t.Errorf("200-rune entry should not be truncated, got: %q", output2.String())
+	}
+}
+
+// TestLatest_shows_updated_date verifies that the date column (column index 1
+// when splitting on two-space separators) shows UpdatedAt, not CreatedAt.
+// CreatedAt and UpdatedAt are intentionally distinct so the test would catch
+// an implementation that formats the wrong field.
+func TestLatest_shows_updated_date(t *testing.T) {
+	store := newTestStore(t)
+
+	createdAt := time.Date(2024, 1, 10, 0, 0, 0, 0, time.UTC)
+	updatedAt := time.Date(2025, 3, 15, 0, 0, 0, 0, time.UTC)
+	entry := storage.Entry{
+		ID:        "aaaaaa",
+		Topics:    []string{"golang"},
+		Text:      "some text",
+		Related:   []string{},
+		CreatedAt: createdAt,
+		UpdatedAt: updatedAt,
+	}
+	appendEntries(t, store, entry)
+
+	var output strings.Builder
+	if err := commands.Latest(store, []string{}, &output); err != nil {
+		t.Fatalf("Latest: %v", err)
+	}
+
+	// Output format (no ANSI in tests): "<id>  <date>  <topic>  <snippet>\n"
+	// Splitting on two-space separators yields columns [id, date, topic, snippet].
+	line := strings.TrimRight(output.String(), "\n")
+	columns := strings.SplitN(line, "  ", 4)
+	if len(columns) != 4 {
+		t.Fatalf("expected 4 columns in output line, got %d: %q", len(columns), line)
+	}
+	if columns[1] != "2025-03-15" {
+		t.Errorf("date column (index 1) = %q, want %q (UpdatedAt); full line: %q", columns[1], "2025-03-15", line)
 	}
 }
 
