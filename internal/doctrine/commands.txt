@@ -22,3 +22,10 @@ Anywhere a command takes an ID, you can pass any unique prefix of
 that ID instead — a single character is fine as long as it's
 unambiguous. If the prefix matches more than one entry, the command
 will error and list the candidates.
+
+SEARCH QUERIES
+
+Multiple terms are implicit AND. Uppercase operators:
+  gn search "auth OR token"     either word
+  gn search "auth NOT token"    auth but not token
+  gn search '"exact phrase"'    exact phrase match
