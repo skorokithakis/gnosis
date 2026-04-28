@@ -132,7 +132,7 @@ func Search(store *storage.Store, argv []string, writer io.Writer) error {
 	for _, hit := range hits {
 		entry, found := entryByID[hit.EntryID]
 		primaryTopic := ""
-		updatedDate := ""
+		updatedDate := strings.Repeat(" ", 10)
 		if found {
 			primaryTopic = primaryTopicOf(entry)
 			updatedDate = entry.UpdatedAt.Format("2006-01-02")
