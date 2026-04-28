@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.5.2](https://github.com/skorokithakis/gnosis/compare/v0.5.1...v0.5.2) (2026-04-28)
+
+
+### Features
+
+* Add design note on FTS5 vs Bleve for search indexing ([2ccc56d](https://github.com/skorokithakis/gnosis/commit/2ccc56d5bb72ceeeb57f41d00b1d58a27d88532e))
+* Add gn latest command ([cbe0a52](https://github.com/skorokithakis/gnosis/commit/cbe0a52c47a31354a09258210d6065ea990e78d2))
+* add updated-date column to latest and search output ([e6db0ce](https://github.com/skorokithakis/gnosis/commit/e6db0ced8fb97a66b40f94409f3c326eee66231a))
+* fix search result formatting for updated date ([743f576](https://github.com/skorokithakis/gnosis/commit/743f57638ad56f843a450b98c20c4e1b92a0d649))
+* Update doctrine to prioritize human-provided context ([fb53422](https://github.com/skorokithakis/gnosis/commit/fb53422e29e9402306d5c4d739017ac20038eaaf))
+
 ## [0.5.1](https://github.com/skorokithakis/gnosis/compare/v0.5.0...v0.5.1) (2026-04-25)
 
 
