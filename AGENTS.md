@@ -10,15 +10,17 @@ Entries are JSONL on disk with a SQLite FTS5 search index.
 
 ## Layout
 
-- `cmd/gn/main.go` — thin CLI dispatcher.
-- `internal/commands/` — one file per subcommand (`write`, `search`,
-  `show`, `topics`, `edit`, `rm`, `reindex`) plus `resolve.go` for ID
-  prefix resolution. Each command takes a `*storage.Store` and an
-  `io.Writer` so tests can capture output.
+- `cmd/gn/main.go` — thin CLI dispatcher; one `case` per subcommand.
+- `internal/commands/` — one file per subcommand, plus `resolve.go`
+  for ID-prefix resolution. Each command takes a `*storage.Store` and
+  an `io.Writer` so tests can capture output.
 - `internal/storage/` — JSONL store, entry type, ID generation, topic
   normalization, repo-root discovery.
 - `internal/index/` — FTS5 index wrapper.
-- `internal/doctrine/` — embedded help text (`gn help`, `gn help review`).
+- `internal/doctrine/` — embedded help text (`gn help`, `gn help plan`,
+  `gn help review`).
+- `internal/paths/`, `internal/termcolor/`, `internal/textwrap/` —
+  small support packages; purpose matches the name.
 
 ## Conventions
 
@@ -28,7 +30,9 @@ Entries are JSONL on disk with a SQLite FTS5 search index.
   the single source of truth.
 - Dispatch rule in `show`: target ≤ 6 chars is an ID prefix, otherwise
   a topic name.
-- Output currently plain text; no color library in use.
+- Color output via `internal/termcolor`, gated on TTY detection in
+  `cmd/gn/main.go`. Do not add color writes outside `termcolor`; do
+  route new colored output through it.
 - Tests live next to their code; `go test ./...` runs them.
 
 ## Commands
