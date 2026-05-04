@@ -82,6 +82,11 @@ If you are an AI agent, gnosis has three touchpoints in your workflow:
    run "gn search" with keywords from your plan — system names,
    feature areas, technical concepts you're about to touch.
 
+   Join your keywords with uppercase OR — "gn search 'auth OR token
+   OR session'" — so a hit on any one term surfaces. Bare
+   space-separated terms are an implicit AND and will usually return
+   nothing.
+
    Read what comes back. If any recorded decision conflicts with your
    plan, surface it to the user before proceeding. The recorded
    decision may still hold, may be stale, or may need explicit
