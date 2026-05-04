@@ -2,6 +2,7 @@ package commands
 
 import (
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"slices"
@@ -9,6 +10,7 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"github.com/mattn/go-isatty"
 	"github.com/skorokithakis/gnosis/internal/storage"
 )
 
@@ -159,14 +161,22 @@ func validateEditedEntry(parsed ParsedEntry, entryID string, allEntries []storag
 	return resolvedRelated, nil
 }
 
-// Edit loads the entry matching the given ID prefix, opens it in $EDITOR for
-// the user to modify, then validates and saves the result. If the user makes no
-// changes, it prints "no changes" and exits cleanly.
+// Edit loads the entry matching the given ID prefix and either opens it in
+// $EDITOR (interactive path) or replaces only the text body non-interactively.
 //
-// The entry is read before the editor is opened so the user sees the current
-// state. The actual save uses Store.Update, which holds an exclusive lock
-// across read-modify-write, preventing concurrent appends from being lost.
-func Edit(store *storage.Store, idPrefix string) error {
+// Non-interactive path is taken when:
+//   - args contains at least one element (the first element is the new text), or
+//   - stdin is not a TTY (piped input).
+//
+// Positional text takes precedence over stdin when both are present.
+// In the non-interactive path only the text body is replaced; topics and
+// related are preserved unchanged.
+//
+// The interactive path (no text arg, stdin is a TTY) opens $EDITOR as before.
+//
+// The actual save uses Store.Update, which holds an exclusive lock across
+// read-modify-write, preventing concurrent appends from being lost.
+func Edit(store *storage.Store, idPrefix string, args []string, stdin io.Reader, out io.Writer) error {
 	// Read the entry before opening the editor so the user sees the current
 	// state. This read is outside the lock because the editor interaction is
 	// unbounded in time — we cannot hold a lock while waiting for the user.
@@ -195,6 +205,55 @@ func Edit(store *storage.Store, idPrefix string) error {
 
 	original := allEntries[entryIndex]
 
+	// Determine whether to take the non-interactive path.
+	// Positional arg takes precedence; fall back to stdin if not a TTY.
+	var newText string
+	nonInteractive := false
+
+	if len(args) > 0 {
+		newText = args[0]
+		nonInteractive = true
+	} else if stdinFile, ok := stdin.(*os.File); ok && !isatty.IsTerminal(stdinFile.Fd()) {
+		raw, err := io.ReadAll(stdin)
+		if err != nil {
+			return fmt.Errorf("reading stdin: %w", err)
+		}
+		newText = string(raw)
+		nonInteractive = true
+	}
+
+	if nonInteractive {
+		newText = strings.TrimSpace(newText)
+		if newText == "" {
+			return fmt.Errorf("text must not be empty")
+		}
+
+		if newText == original.Text {
+			fmt.Fprintln(out, "no changes")
+			return nil
+		}
+
+		var transformErr error
+		updateErr := store.Update(func(entries []storage.Entry) []storage.Entry {
+			for index, entry := range entries {
+				if entry.ID == id {
+					updated := entry
+					updated.Text = newText
+					updated.UpdatedAt = time.Now().UTC()
+					entries[index] = updated
+					return entries
+				}
+			}
+			transformErr = fmt.Errorf("entry %q was deleted before the edit could be saved", id)
+			return entries
+		})
+		if transformErr != nil {
+			return transformErr
+		}
+		return updateErr
+	}
+
+	// Interactive path: open $EDITOR.
 	tmpFile, err := os.CreateTemp("", "gnosis-edit-*.txt")
 	if err != nil {
 		return fmt.Errorf("creating temp file: %w", err)
@@ -257,7 +316,7 @@ func Edit(store *storage.Store, idPrefix string) error {
 		original.Text == parsed.Text
 
 	if unchanged {
-		fmt.Println("no changes")
+		fmt.Fprintln(out, "no changes")
 		return nil
 	}
 

@@ -110,12 +110,16 @@ func main() {
 			fmt.Fprintln(os.Stderr, "gn: edit: missing entry ID")
 			os.Exit(1)
 		}
+		if len(os.Args) > 4 {
+			fmt.Fprintln(os.Stderr, "usage: gn edit <id> [text]")
+			os.Exit(1)
+		}
 		store, err := storage.NewStore()
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "gn: %v\n", err)
 			os.Exit(1)
 		}
-		if err := commands.Edit(store, os.Args[2]); err != nil {
+		if err := commands.Edit(store, os.Args[2], os.Args[3:], os.Stdin, os.Stdout); err != nil {
 			fmt.Fprintf(os.Stderr, "gn: %v\n", err)
 			os.Exit(1)
 		}

@@ -11,6 +11,8 @@ COMMANDS
   gn show <id|topic>     Show one entry or all entries for a topic.
   gn topics              List all topics with entry counts.
   gn edit <id>           Edit an entry in $EDITOR.
+  gn edit <id> "text"    Replace text body non-interactively (topics/related preserved).
+  echo "text" | gn edit <id>   Same as above via stdin.
   gn rm <id> [id...]     Remove entries.
   gn reindex             Rebuild the search index.
 

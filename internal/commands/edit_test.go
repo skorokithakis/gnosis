@@ -2,6 +2,7 @@ package commands_test
 
 import (
 	"fmt"
+	"io"
 	"os"
 	"strings"
 	"testing"
@@ -10,6 +11,11 @@ import (
 	"github.com/skorokithakis/gnosis/internal/commands"
 	"github.com/skorokithakis/gnosis/internal/storage"
 )
+
+// ttyStdin returns a non-*os.File reader that signals "no piped stdin" to
+// Edit, so the interactive (editor) path is taken regardless of whether the
+// test process's own stdin is a TTY.
+func ttyStdin() io.Reader { return strings.NewReader("") }
 
 // --- ParseEditBuffer ---
 
@@ -172,7 +178,7 @@ func TestEdit_no_changes(t *testing.T) {
 	// Editor that does nothing (leaves the file unchanged).
 	t.Setenv("EDITOR", "true")
 
-	if err := commands.Edit(store, "aaaaaa"); err != nil {
+	if err := commands.Edit(store, "aaaaaa", nil, ttyStdin(), io.Discard); err != nil {
 		t.Fatalf("Edit returned error: %v", err)
 	}
 
@@ -207,7 +213,7 @@ EOF`))
 	t.Setenv("EDITOR", script)
 
 	before := time.Now().UTC()
-	if err := commands.Edit(store, "aaaaaa"); err != nil {
+	if err := commands.Edit(store, "aaaaaa", nil, ttyStdin(), io.Discard); err != nil {
 		t.Fatalf("Edit returned error: %v", err)
 	}
 
@@ -241,7 +247,7 @@ func TestEdit_missing_entry(t *testing.T) {
 	store := newTestStore(t)
 	t.Setenv("EDITOR", "true")
 
-	err := commands.Edit(store, "zzzzzz")
+	err := commands.Edit(store, "zzzzzz", nil, ttyStdin(), io.Discard)
 	if err == nil {
 		t.Fatal("expected error for missing entry, got nil")
 	}
@@ -259,7 +265,7 @@ some text
 EOF`)
 	t.Setenv("EDITOR", script)
 
-	err := commands.Edit(store, "aaaaaa")
+	err := commands.Edit(store, "aaaaaa", nil, ttyStdin(), io.Discard)
 	if err == nil {
 		t.Fatal("expected error for empty topics, got nil")
 	}
@@ -276,7 +282,7 @@ func TestEdit_empty_body_rejected(t *testing.T) {
 EOF`)
 	t.Setenv("EDITOR", script)
 
-	err := commands.Edit(store, "aaaaaa")
+	err := commands.Edit(store, "aaaaaa", nil, ttyStdin(), io.Discard)
 	if err == nil {
 		t.Fatal("expected error for empty body, got nil")
 	}
@@ -294,7 +300,7 @@ some text
 EOF`)
 	t.Setenv("EDITOR", script)
 
-	err := commands.Edit(store, "aaaaaa")
+	err := commands.Edit(store, "aaaaaa", nil, ttyStdin(), io.Discard)
 	if err == nil {
 		t.Fatal("expected error for invalid related ID, got nil")
 	}
@@ -312,7 +318,7 @@ updated text
 EOF`)
 	t.Setenv("EDITOR", script)
 
-	if err := commands.Edit(store, "aaaaaa"); err != nil {
+	if err := commands.Edit(store, "aaaaaa", nil, ttyStdin(), io.Discard); err != nil {
 		t.Fatalf("Edit returned unexpected error: %v", err)
 	}
 
@@ -353,7 +359,7 @@ original text
 EOF`)
 	t.Setenv("EDITOR", script)
 
-	if err := commands.Edit(store, "aaaaaa"); err != nil {
+	if err := commands.Edit(store, "aaaaaa", nil, ttyStdin(), io.Discard); err != nil {
 		t.Fatalf("Edit returned error: %v", err)
 	}
 
@@ -386,7 +392,7 @@ updated text
 EOF`)
 	t.Setenv("EDITOR", script)
 
-	if err := commands.Edit(store, "aaaaaa"); err != nil {
+	if err := commands.Edit(store, "aaaaaa", nil, ttyStdin(), io.Discard); err != nil {
 		t.Fatalf("Edit returned error: %v", err)
 	}
 
@@ -419,7 +425,7 @@ func TestEdit_editor_with_arguments(t *testing.T) {
 	// but it exercises the multi-field EDITOR splitting path.
 	t.Setenv("EDITOR", "sh -c true")
 
-	if err := commands.Edit(store, "aaaaaa"); err != nil {
+	if err := commands.Edit(store, "aaaaaa", nil, ttyStdin(), io.Discard); err != nil {
 		t.Fatalf("Edit with multi-word EDITOR returned error: %v", err)
 	}
 }
@@ -438,7 +444,7 @@ some text
 EOF`)
 	t.Setenv("EDITOR", script)
 
-	err := commands.Edit(store, "aaaaaa")
+	err := commands.Edit(store, "aaaaaa", nil, ttyStdin(), io.Discard)
 	if err == nil {
 		t.Fatal("expected error for short topic, got nil")
 	}
@@ -463,7 +469,7 @@ updated text
 EOF`)
 	t.Setenv("EDITOR", script)
 
-	if err := commands.Edit(store, "aaaaaa"); err != nil {
+	if err := commands.Edit(store, "aaaaaa", nil, ttyStdin(), io.Discard); err != nil {
 		t.Fatalf("Edit returned unexpected error: %v", err)
 	}
 
@@ -501,7 +507,7 @@ updated text
 EOF`)
 	t.Setenv("EDITOR", script)
 
-	err := commands.Edit(store, "cccccc")
+	err := commands.Edit(store, "cccccc", nil, ttyStdin(), io.Discard)
 	if err == nil {
 		t.Fatal("expected error for ambiguous related prefix, got nil")
 	}
@@ -516,7 +522,7 @@ func TestEdit_editor_nonzero_exit_aborts(t *testing.T) {
 	// Editor that exits non-zero.
 	t.Setenv("EDITOR", "false")
 
-	err := commands.Edit(store, "aaaaaa")
+	err := commands.Edit(store, "aaaaaa", nil, ttyStdin(), io.Discard)
 	if err == nil {
 		t.Fatal("expected error when editor exits non-zero, got nil")
 	}
@@ -528,5 +534,169 @@ func TestEdit_editor_nonzero_exit_aborts(t *testing.T) {
 	}
 	if entries[0].Text != "original" {
 		t.Errorf("entry was modified despite editor failure: %q", entries[0].Text)
+	}
+}
+
+// --- Non-interactive path tests ---
+
+// TestEdit_positional_arg_updates_text verifies that passing a positional text
+// argument replaces the text body without launching an editor.
+func TestEdit_positional_arg_updates_text(t *testing.T) {
+	store := newTestStore(t)
+	entry := sampleEntry("aaaaaa")
+	entry.Topics = []string{"go-lang"}
+	entry.Text = "original text"
+	entry.Related = []string{"bbbbbb"}
+	appendEntries(t, store, sampleEntry("bbbbbb"), entry)
+
+	before := time.Now().UTC()
+	var out strings.Builder
+	if err := commands.Edit(store, "aaaaaa", []string{"new text"}, ttyStdin(), &out); err != nil {
+		t.Fatalf("Edit returned error: %v", err)
+	}
+
+	entries, err := store.ReadAll()
+	if err != nil {
+		t.Fatalf("ReadAll: %v", err)
+	}
+
+	var updated storage.Entry
+	for _, e := range entries {
+		if e.ID == "aaaaaa" {
+			updated = e
+		}
+	}
+
+	if updated.Text != "new text" {
+		t.Errorf("Text not updated: got %q", updated.Text)
+	}
+	// Topics and related must be preserved.
+	if len(updated.Topics) != 1 || updated.Topics[0] != "go-lang" {
+		t.Errorf("Topics changed unexpectedly: got %v", updated.Topics)
+	}
+	if len(updated.Related) != 1 || updated.Related[0] != "bbbbbb" {
+		t.Errorf("Related changed unexpectedly: got %v", updated.Related)
+	}
+	if updated.UpdatedAt.Before(before) {
+		t.Errorf("UpdatedAt not updated: got %v", updated.UpdatedAt)
+	}
+	// No "no changes" output expected.
+	if out.String() != "" {
+		t.Errorf("unexpected output: %q", out.String())
+	}
+}
+
+// TestEdit_stdin_updates_text verifies that piped stdin (non-TTY *os.File)
+// replaces the text body without launching an editor.
+func TestEdit_stdin_updates_text(t *testing.T) {
+	store := newTestStore(t)
+	entry := sampleEntry("aaaaaa")
+	entry.Topics = []string{"go-lang"}
+	entry.Text = "original text"
+	entry.Related = []string{}
+	appendEntries(t, store, entry)
+
+	// Simulate piped stdin via an os.Pipe (not a TTY).
+	reader, writer, err := os.Pipe()
+	if err != nil {
+		t.Fatalf("os.Pipe: %v", err)
+	}
+	if _, err := writer.WriteString("piped new text\n"); err != nil {
+		t.Fatalf("writing to pipe: %v", err)
+	}
+	writer.Close()
+
+	var out strings.Builder
+	if err := commands.Edit(store, "aaaaaa", nil, reader, &out); err != nil {
+		t.Fatalf("Edit returned error: %v", err)
+	}
+	reader.Close()
+
+	entries, err := store.ReadAll()
+	if err != nil {
+		t.Fatalf("ReadAll: %v", err)
+	}
+	if entries[0].Text != "piped new text" {
+		t.Errorf("Text not updated: got %q", entries[0].Text)
+	}
+	// Topics must be preserved.
+	if len(entries[0].Topics) != 1 || entries[0].Topics[0] != "go-lang" {
+		t.Errorf("Topics changed unexpectedly: got %v", entries[0].Topics)
+	}
+}
+
+// TestEdit_no_change_non_interactive prints "no changes" and exits 0 when the
+// new text equals the existing text.
+func TestEdit_no_change_non_interactive(t *testing.T) {
+	store := newTestStore(t)
+	entry := sampleEntry("aaaaaa")
+	entry.Text = "same text"
+	appendEntries(t, store, entry)
+
+	var out strings.Builder
+	if err := commands.Edit(store, "aaaaaa", []string{"same text"}, ttyStdin(), &out); err != nil {
+		t.Fatalf("Edit returned error: %v", err)
+	}
+
+	if !strings.Contains(out.String(), "no changes") {
+		t.Errorf("expected 'no changes' output, got: %q", out.String())
+	}
+
+	// UpdatedAt must not have changed.
+	entries, err := store.ReadAll()
+	if err != nil {
+		t.Fatalf("ReadAll: %v", err)
+	}
+	if !entries[0].UpdatedAt.Equal(entry.UpdatedAt) {
+		t.Errorf("UpdatedAt changed unexpectedly: got %v, want %v", entries[0].UpdatedAt, entry.UpdatedAt)
+	}
+}
+
+// TestEdit_empty_text_non_interactive verifies that an empty (or whitespace-only)
+// positional text argument is rejected with an error.
+func TestEdit_empty_text_non_interactive(t *testing.T) {
+	store := newTestStore(t)
+	appendEntries(t, store, sampleEntry("aaaaaa"))
+
+	err := commands.Edit(store, "aaaaaa", []string{"   "}, ttyStdin(), io.Discard)
+	if err == nil {
+		t.Fatal("expected error for empty text, got nil")
+	}
+	if !strings.Contains(err.Error(), "empty") {
+		t.Errorf("error should mention empty text, got: %v", err)
+	}
+}
+
+// TestEdit_positional_takes_precedence_over_stdin verifies that when both a
+// positional text argument and piped stdin are present, the positional arg wins.
+func TestEdit_positional_takes_precedence_over_stdin(t *testing.T) {
+	store := newTestStore(t)
+	entry := sampleEntry("aaaaaa")
+	entry.Text = "original text"
+	appendEntries(t, store, entry)
+
+	// Provide piped stdin with different content.
+	reader, writer, err := os.Pipe()
+	if err != nil {
+		t.Fatalf("os.Pipe: %v", err)
+	}
+	if _, err := writer.WriteString("stdin text\n"); err != nil {
+		t.Fatalf("writing to pipe: %v", err)
+	}
+	writer.Close()
+
+	var out strings.Builder
+	// Positional arg "positional text" should win over stdin "stdin text".
+	if err := commands.Edit(store, "aaaaaa", []string{"positional text"}, reader, &out); err != nil {
+		t.Fatalf("Edit returned error: %v", err)
+	}
+	reader.Close()
+
+	entries, err := store.ReadAll()
+	if err != nil {
+		t.Fatalf("ReadAll: %v", err)
+	}
+	if entries[0].Text != "positional text" {
+		t.Errorf("expected positional text to win, got: %q", entries[0].Text)
 	}
 }
