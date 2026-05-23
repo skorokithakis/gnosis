@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.5.3](https://github.com/skorokithakis/gnosis/compare/v0.5.2...v0.5.3) (2026-05-23)
+
+
+### Features
+
+* Add non-interactive mode to gn edit ([1eb0aa7](https://github.com/skorokithakis/gnosis/commit/1eb0aa7e575945154c79b65871446cffa07a1847))
+
+
+### Bug Fixes
+
+* avoid FTS5 SQL error when hyphenated terms mix with OR/AND/NOT ([ad31769](https://github.com/skorokithakis/gnosis/commit/ad317698cfc81091c4f709d73dabf95808ac3281))
+
 ## [0.5.2](https://github.com/skorokithakis/gnosis/compare/v0.5.1...v0.5.2) (2026-04-28)
 
 
