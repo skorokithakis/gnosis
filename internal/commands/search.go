@@ -12,16 +12,9 @@ import (
 	"github.com/skorokithakis/gnosis/internal/termcolor"
 )
 
-// fts5OperatorPattern matches any character sequence that indicates the user
-// is intentionally using FTS5 query syntax rather than typing a bare search
-// term. We look for: double-quote (phrase query), parentheses (grouping),
-// colon (column qualifier), and the uppercase boolean keywords AND/OR/NOT
-// surrounded by spaces (FTS5 only treats these as operators when uppercase).
-var fts5OperatorPattern = regexp.MustCompile(`"|[():]| AND | OR | NOT `)
-
 // nonAlphanumericPattern matches one or more consecutive characters that are
 // neither alphanumeric nor whitespace. These are replaced with a single space
-// when sanitizing a bare query so that e.g. "keymaster-token-auth" becomes
+// when sanitizing a bareword so that e.g. "keymaster-token-auth" becomes
 // "keymaster token auth", which FTS5 interprets as an AND-of-three-terms match.
 var nonAlphanumericPattern = regexp.MustCompile(`[^a-zA-Z0-9\s]+`)
 
@@ -29,16 +22,72 @@ var nonAlphanumericPattern = regexp.MustCompile(`[^a-zA-Z0-9\s]+`)
 // including newlines. Used to collapse multi-line FTS5 snippets to a single line.
 var whitespaceRunPattern = regexp.MustCompile(`\s+`)
 
-// sanitizeQuery returns the query unchanged if it contains FTS5 operator
-// syntax (the user knows what they are doing), or replaces runs of
-// non-alphanumeric, non-whitespace characters with spaces so that bare
-// hyphenated terms like "keymaster-token-auth" do not trigger FTS5's column
-// qualifier parser.
+// sanitizeQuery prepares a user-supplied FTS5 query string by scanning
+// left-to-right and applying four rules:
+//  1. Quoted phrases "..." pass through verbatim (including the quotes).
+//  2. Structural chars (, ), :, and whitespace pass through verbatim.
+//  3. Whole-word uppercase tokens AND, OR, NOT pass through verbatim.
+//  4. Every other bareword run has non-alphanumeric chars replaced with spaces.
+//
+// This allows queries like "foo OR latest-release" to work: the OR operator is
+// preserved while the hyphen in "latest-release" is sanitized so that FTS5 does
+// not parse it as "latest - release" (column-filter operator).
 func sanitizeQuery(query string) string {
-	if fts5OperatorPattern.MatchString(query) {
-		return query
+	var result strings.Builder
+	i := 0
+	n := len(query)
+
+	for i < n {
+		c := query[i]
+
+		// Rule 1: Quoted phrases "..." pass through verbatim.
+		if c == '"' {
+			// Scan to the closing quote.
+			j := i + 1
+			for j < n && query[j] != '"' {
+				j++
+			}
+			if j < n {
+				j++ // include closing quote
+			}
+			result.WriteString(query[i:j])
+			i = j
+			continue
+		}
+
+		// Rule 2: Structural chars and whitespace pass through verbatim.
+		if c == '(' || c == ')' || c == ':' || c == ' ' || c == '\t' || c == '\n' || c == '\r' {
+			result.WriteByte(c)
+			i++
+			continue
+		}
+
+		// Collect a bareword run: everything until a structural char,
+		// whitespace, or quote.
+		j := i
+		for j < n {
+			cc := query[j]
+			if cc == '"' || cc == '(' || cc == ')' || cc == ':' ||
+				cc == ' ' || cc == '\t' || cc == '\n' || cc == '\r' {
+				break
+			}
+			j++
+		}
+
+		word := query[i:j]
+
+		// Rule 3: Whole-word uppercase AND, OR, NOT pass through verbatim.
+		if word == "AND" || word == "OR" || word == "NOT" {
+			result.WriteString(word)
+		} else {
+			// Rule 4: Sanitize the bareword.
+			result.WriteString(nonAlphanumericPattern.ReplaceAllString(word, " "))
+		}
+
+		i = j
 	}
-	return nonAlphanumericPattern.ReplaceAllString(query, " ")
+
+	return result.String()
 }
 
 const defaultSearchLimit = 20
