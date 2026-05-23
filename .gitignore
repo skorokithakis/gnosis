@@ -7,3 +7,6 @@ dist/
 *.swp
 *~
 gn
+
+# Local ticket tracking
+.tickets/
