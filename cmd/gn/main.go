@@ -11,11 +11,6 @@ import (
 	"golang.org/x/term"
 )
 
-func notImplemented(command string) {
-	fmt.Fprintf(os.Stderr, "gn: %s: not implemented\n", command)
-	os.Exit(1)
-}
-
 // printHelp prints a doctrine body followed by the shared commands
 // reference, so every help surface ends with the command list.
 func printHelp(body string) {
@@ -30,6 +25,10 @@ func main() {
 		return
 	}
 
+	// Dispatch help and reject unknown commands before creating a store, so
+	// that `gn help` and `gn <typo>` work even outside of a repo. Every other
+	// command needs a store; it is created once after this gate instead of
+	// being re-opened in each case.
 	switch os.Args[1] {
 	case "help":
 		if len(os.Args) < 3 {
@@ -45,32 +44,33 @@ func main() {
 			fmt.Fprintf(os.Stderr, "gn: unknown help topic %q\n", os.Args[2])
 			os.Exit(1)
 		}
+		return
+	case "write", "search", "latest", "show", "topics", "edit", "rm", "reindex":
+		// Known command that needs a store; fall through to creation + dispatch.
+	default:
+		fmt.Fprintf(os.Stderr, "gn: unknown command %q\n", os.Args[1])
+		fmt.Fprintln(os.Stderr, "Run 'gn help' for a list of available commands.")
+		os.Exit(1)
+	}
+
+	store, err := storage.NewStore()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "gn: %v\n", err)
+		os.Exit(1)
+	}
+
+	switch os.Args[1] {
 	case "write":
-		store, err := storage.NewStore()
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "gn: %v\n", err)
-			os.Exit(1)
-		}
 		if err := commands.Write(store, os.Args[2:], os.Stdout); err != nil {
 			fmt.Fprintf(os.Stderr, "gn: %v\n", err)
 			os.Exit(1)
 		}
 	case "search":
-		store, err := storage.NewStore()
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "gn: %v\n", err)
-			os.Exit(1)
-		}
 		if err := commands.Search(store, os.Args[2:], os.Stdout); err != nil {
 			fmt.Fprintf(os.Stderr, "gn: %v\n", err)
 			os.Exit(1)
 		}
 	case "latest":
-		store, err := storage.NewStore()
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "gn: %v\n", err)
-			os.Exit(1)
-		}
 		if err := commands.Latest(store, os.Args[2:], os.Stdout); err != nil {
 			fmt.Fprintf(os.Stderr, "gn: %v\n", err)
 			os.Exit(1)
@@ -78,11 +78,6 @@ func main() {
 	case "show":
 		if len(os.Args) < 3 {
 			fmt.Fprintln(os.Stderr, "gn show: missing target argument")
-			os.Exit(1)
-		}
-		store, err := storage.NewStore()
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "gn: %v\n", err)
 			os.Exit(1)
 		}
 		wrapWidth := 0
@@ -96,11 +91,6 @@ func main() {
 			os.Exit(1)
 		}
 	case "topics":
-		store, err := storage.NewStore()
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "gn: %v\n", err)
-			os.Exit(1)
-		}
 		if err := commands.Topics(store, os.Stdout); err != nil {
 			fmt.Fprintf(os.Stderr, "gn: %v\n", err)
 			os.Exit(1)
@@ -114,32 +104,19 @@ func main() {
 			fmt.Fprintln(os.Stderr, "usage: gn edit <id> [text]")
 			os.Exit(1)
 		}
-		store, err := storage.NewStore()
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "gn: %v\n", err)
-			os.Exit(1)
-		}
 		if err := commands.Edit(store, os.Args[2], os.Args[3:], os.Stdin, os.Stdout); err != nil {
 			fmt.Fprintf(os.Stderr, "gn: %v\n", err)
 			os.Exit(1)
 		}
 	case "rm":
-		store, err := storage.NewStore()
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "gn: %v\n", err)
-			os.Exit(1)
-		}
 		if err := commands.Remove(store, os.Args[2:], os.Stdout, os.Stderr); err != nil {
 			fmt.Fprintf(os.Stderr, "gn: %v\n", err)
 			os.Exit(1)
 		}
 	case "reindex":
+		// repoRoot is resolved separately rather than recovered from the store
+		// because the store does not expose the root it was built from.
 		repoRoot, err := storage.FindRepoRoot()
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "gn: %v\n", err)
-			os.Exit(1)
-		}
-		store, err := storage.NewStore()
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "gn: %v\n", err)
 			os.Exit(1)
@@ -148,9 +125,5 @@ func main() {
 			fmt.Fprintf(os.Stderr, "gn: %v\n", err)
 			os.Exit(1)
 		}
-	default:
-		fmt.Fprintf(os.Stderr, "gn: unknown command %q\n", os.Args[1])
-		fmt.Fprintln(os.Stderr, "Run 'gn help' for a list of available commands.")
-		os.Exit(1)
 	}
 }

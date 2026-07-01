@@ -8,38 +8,10 @@ import (
 	"slices"
 	"strings"
 	"time"
-	"unicode/utf8"
 
 	"github.com/mattn/go-isatty"
 	"github.com/skorokithakis/gnosis/internal/storage"
 )
-
-// normalizeAndDeduplicateTopics normalizes each topic and removes duplicates
-// that collapse to the same normalized form. It returns an error if any topic
-// normalizes to empty (e.g. "---"), because storing an empty topic would
-// corrupt the entry silently.
-func normalizeAndDeduplicateTopics(raw []string) ([]string, error) {
-	seen := map[string]bool{}
-	var result []string
-	for _, topic := range raw {
-		normalized := storage.NormalizeTopic(topic)
-		if normalized == "" {
-			return nil, fmt.Errorf("topic %q normalizes to empty string", topic)
-		}
-		// Topics must be at least 7 characters in their normalized form so they
-		// cannot be confused with 6-character entry ID prefixes during lookup.
-		// Rune count is used so that multibyte characters are measured correctly.
-		if utf8.RuneCountInString(normalized) < storage.IDLength+1 {
-			return nil, fmt.Errorf("topic %q is too short (normalized form %q has %d characters, minimum is 7)", topic, normalized, utf8.RuneCountInString(normalized))
-		}
-		if seen[normalized] {
-			continue
-		}
-		seen[normalized] = true
-		result = append(result, normalized)
-	}
-	return result, nil
-}
 
 // ParsedEntry holds the parsed result of the temp file the user edited.
 // It is exported so that tests in the commands_test package can inspect it.

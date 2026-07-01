@@ -6,7 +6,6 @@ import (
 	"os"
 	"strings"
 	"time"
-	"unicode/utf8"
 
 	"github.com/mattn/go-isatty"
 	"github.com/skorokithakis/gnosis/internal/storage"
@@ -58,33 +57,20 @@ func Write(store *storage.Store, argv []string, writer io.Writer) error {
 		return fmt.Errorf("text must not be empty")
 	}
 
-	// Parse and deduplicate topics by normalized form. Storage will normalize
-	// on write, but we deduplicate here so that "Foo,foo" within a single
-	// write call collapses to one entry rather than two identical normalized
+	// Parse, normalize, and deduplicate topics. The shared helper is the same
+	// one used by edit, so write and edit apply identical validation rules.
+	// Each segment is trimmed first so error messages reference the cleaned
+	// form; the helper then rejects any segment that normalizes to empty
+	// (which covers both truly empty segments from a trailing comma and
+	// whitespace-only segments), preserving write's strictness about empty
 	// topics.
 	rawTopics := strings.Split(topicsArg, ",")
-	var topics []string
-	seenNormalized := map[string]bool{}
-	for _, raw := range rawTopics {
-		trimmed := strings.TrimSpace(raw)
-		if trimmed == "" {
-			return fmt.Errorf("topic must not be empty")
-		}
-		normalized := storage.NormalizeTopic(trimmed)
-		if normalized == "" {
-			return fmt.Errorf("topic %q normalizes to empty string", trimmed)
-		}
-		// Topics must be at least 7 characters in their normalized form so they
-		// cannot be confused with 6-character entry ID prefixes during lookup.
-		// Rune count is used so that multibyte characters are measured correctly.
-		if utf8.RuneCountInString(normalized) < storage.IDLength+1 {
-			return fmt.Errorf("topic %q is too short (normalized form %q has %d characters, minimum is 7)", trimmed, normalized, utf8.RuneCountInString(normalized))
-		}
-		if seenNormalized[normalized] {
-			continue
-		}
-		seenNormalized[normalized] = true
-		topics = append(topics, normalized)
+	for index := range rawTopics {
+		rawTopics[index] = strings.TrimSpace(rawTopics[index])
+	}
+	topics, err := normalizeAndDeduplicateTopics(rawTopics)
+	if err != nil {
+		return err
 	}
 
 	// Load existing entries to validate --related IDs before attempting the

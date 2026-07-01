@@ -4,10 +4,44 @@ import (
 	"fmt"
 	"io"
 	"sort"
+	"unicode/utf8"
 
 	"github.com/skorokithakis/gnosis/internal/storage"
 	"github.com/skorokithakis/gnosis/internal/termcolor"
 )
+
+// normalizeAndDeduplicateTopics normalizes each topic and removes duplicates
+// that collapse to the same normalized form. It is the single source of truth
+// for topic validation across the write and edit commands.
+//
+// A topic that normalizes to the empty string is rejected rather than silently
+// dropped. This preserves write's strictness about empty segments (e.g. a
+// trailing comma in "foo,") without write having to re-implement the check: an
+// empty or whitespace-only segment normalizes to "" and is rejected here. The
+// edit path, which intentionally tolerates stray commas in the buffer, still
+// works because ParseEditBuffer filters empty segments out before calling this.
+func normalizeAndDeduplicateTopics(raw []string) ([]string, error) {
+	seen := map[string]bool{}
+	var result []string
+	for _, topic := range raw {
+		normalized := storage.NormalizeTopic(topic)
+		if normalized == "" {
+			return nil, fmt.Errorf("topic %q normalizes to empty string", topic)
+		}
+		// Topics must be at least 7 characters in their normalized form so they
+		// cannot be confused with 6-character entry ID prefixes during lookup.
+		// Rune count is used so that multibyte characters are measured correctly.
+		if utf8.RuneCountInString(normalized) < storage.IDLength+1 {
+			return nil, fmt.Errorf("topic %q is too short (normalized form %q has %d characters, minimum is 7)", topic, normalized, utf8.RuneCountInString(normalized))
+		}
+		if seen[normalized] {
+			continue
+		}
+		seen[normalized] = true
+		result = append(result, normalized)
+	}
+	return result, nil
+}
 
 // TopicAggregate holds the normalized topic name and its entry count.
 type TopicAggregate struct {

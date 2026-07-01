@@ -7,14 +7,11 @@ import (
 	"github.com/skorokithakis/gnosis/internal/storage"
 )
 
-// idAlphabetSet is the set of characters that may appear in an entry ID. It
-// mirrors the alphabet constant in the storage package. Characters outside this
-// set cannot be part of any ID, so a prefix containing them can never match.
-const idAlphabetSet = "abcdefghjkmnpqrstuvwxyz"
-
-// isIDAlphabetChar reports whether character is in the ID alphabet.
+// isIDAlphabetChar reports whether character may appear in an entry ID, by
+// checking it against storage.IDAlphabet. Characters outside the alphabet
+// cannot be part of any ID, so a prefix containing them can never match.
 func isIDAlphabetChar(character rune) bool {
-	return strings.ContainsRune(idAlphabetSet, character)
+	return strings.ContainsRune(storage.IDAlphabet, character)
 }
 
 // ResolveIDPrefix finds the single entry whose ID starts with prefix and

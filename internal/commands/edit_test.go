@@ -178,8 +178,14 @@ func TestEdit_no_changes(t *testing.T) {
 	// Editor that does nothing (leaves the file unchanged).
 	t.Setenv("EDITOR", "true")
 
-	if err := commands.Edit(store, "aaaaaa", nil, ttyStdin(), io.Discard); err != nil {
+	// The "no changes" message must be written to the provided writer, not to
+	// stdout directly, so it can be captured here.
+	var output strings.Builder
+	if err := commands.Edit(store, "aaaaaa", nil, ttyStdin(), &output); err != nil {
 		t.Fatalf("Edit returned error: %v", err)
+	}
+	if !strings.Contains(output.String(), "no changes") {
+		t.Errorf("expected %q in writer output, got %q", "no changes", output.String())
 	}
 
 	entries, err := store.ReadAll()

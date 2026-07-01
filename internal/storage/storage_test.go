@@ -41,58 +41,6 @@ func TestLockFile_lands_in_cacheDir(t *testing.T) {
 	}
 }
 
-// --- Stale-lock cleanup ---
-
-// TestRemoveStaleRepoLock_removes_before_cutoff verifies that
-// RemoveStaleRepoLock deletes <gnosisDir>/.lock when called before the cutoff.
-func TestRemoveStaleRepoLock_removes_before_cutoff(t *testing.T) {
-	defer storage.SetStaleLockCutoff(time.Now().Add(24 * time.Hour))()
-
-	gnosisDir := filepath.Join(t.TempDir(), ".gnosis")
-	if err := os.MkdirAll(gnosisDir, 0o755); err != nil {
-		t.Fatalf("MkdirAll: %v", err)
-	}
-	staleLock := filepath.Join(gnosisDir, ".lock")
-	if err := os.WriteFile(staleLock, nil, 0o644); err != nil {
-		t.Fatalf("WriteFile: %v", err)
-	}
-
-	store, err := storage.NewStoreAt(gnosisDir, t.TempDir())
-	if err != nil {
-		t.Fatalf("NewStoreAt: %v", err)
-	}
-	store.RemoveStaleRepoLock()
-
-	if _, err := os.Stat(staleLock); err == nil {
-		t.Errorf("stale lock file should have been removed but still exists at %q", staleLock)
-	}
-}
-
-// TestRemoveStaleRepoLock_skips_after_cutoff verifies that RemoveStaleRepoLock
-// leaves <gnosisDir>/.lock untouched when called after the cutoff.
-func TestRemoveStaleRepoLock_skips_after_cutoff(t *testing.T) {
-	defer storage.SetStaleLockCutoff(time.Now().Add(-24 * time.Hour))()
-
-	gnosisDir := filepath.Join(t.TempDir(), ".gnosis")
-	if err := os.MkdirAll(gnosisDir, 0o755); err != nil {
-		t.Fatalf("MkdirAll: %v", err)
-	}
-	staleLock := filepath.Join(gnosisDir, ".lock")
-	if err := os.WriteFile(staleLock, nil, 0o644); err != nil {
-		t.Fatalf("WriteFile: %v", err)
-	}
-
-	store, err := storage.NewStoreAt(gnosisDir, t.TempDir())
-	if err != nil {
-		t.Fatalf("NewStoreAt: %v", err)
-	}
-	store.RemoveStaleRepoLock()
-
-	if _, err := os.Stat(staleLock); err != nil {
-		t.Errorf("stale lock file should not have been removed after cutoff, but got: %v", err)
-	}
-}
-
 // --- gnosisDir not created by read-only operations ---
 
 // TestReadAll_does_not_create_gnosisDir verifies that ReadAll on a fresh store

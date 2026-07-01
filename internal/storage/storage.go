@@ -16,10 +16,13 @@ import (
 	"github.com/skorokithakis/gnosis/internal/paths"
 )
 
-// alphabet is the set of lowercase letters used for ID generation. The letters
-// i, l, and o are excluded because they are visually confusable with 1, 1, and
-// 0 respectively, which would make IDs harder to read and transcribe.
-const alphabet = "abcdefghjkmnpqrstuvwxyz"
+// IDAlphabet is the set of lowercase letters used for ID generation. The
+// letters i, l, and o are excluded because they are visually confusable with 1,
+// 1, and 0 respectively, which would make IDs harder to read and transcribe.
+// It is exported so that callers (e.g. ID-prefix resolution in the commands
+// package) can distinguish valid ID characters from other input without
+// duplicating the alphabet.
+const IDAlphabet = "abcdefghjkmnpqrstuvwxyz"
 
 // IDLength is the number of characters in a generated entry ID. It is exported
 // so that callers can use it to distinguish ID-prefix queries from topic queries
@@ -38,16 +41,6 @@ type Entry struct {
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
 }
-
-// staleLockCutoff is the date after which the opportunistic cleanup of the old
-// .gnosis/.lock file is skipped entirely. The lock file moved out of the repo
-// on 2026-04-25 and nobody but the author was running gn before then, so the
-// cleanup window only needs to cover a short migration period.
-//
-// TODO: remove this stale-lock cleanup after 2026-07-01; the lock file moved
-// out of the repo on 2026-04-25 and nobody but the author was running gn
-// before then.
-var staleLockCutoff = time.Date(2026, 7, 1, 0, 0, 0, 0, time.UTC)
 
 // Store holds the resolved path to the .gnosis directory and provides all
 // storage operations. Callers obtain a Store via NewStore.
@@ -70,12 +63,10 @@ func NewStore() (*Store, error) {
 	if err != nil {
 		return nil, fmt.Errorf("resolving cache directory: %w", err)
 	}
-	store := &Store{
+	return &Store{
 		gnosisDir: filepath.Join(root, ".gnosis"),
 		cacheDir:  cacheDir,
-	}
-	store.removeStaleRepoLock()
-	return store, nil
+	}, nil
 }
 
 // NewStoreAt returns a Store that uses gnosisDir as its .gnosis directory and
@@ -117,21 +108,6 @@ func (store *Store) ensureCacheDir() error {
 // responsible for closing it and releasing the flock.
 func (store *Store) openLockFile() (*os.File, error) {
 	return os.OpenFile(store.lockPath(), os.O_WRONLY|os.O_CREATE, 0o644)
-}
-
-// removeStaleRepoLock opportunistically removes the old .gnosis/.lock file
-// that existed before the lock was moved to the cache directory. Errors are
-// silently ignored because the file is no longer used and its absence is the
-// desired state.
-//
-// TODO: remove this stale-lock cleanup after 2026-07-01; the lock file moved
-// out of the repo on 2026-04-25 and nobody but the author was running gn
-// before then.
-func (store *Store) removeStaleRepoLock() {
-	if time.Now().After(staleLockCutoff) {
-		return
-	}
-	os.Remove(filepath.Join(store.gnosisDir, ".lock")) //nolint:errcheck
 }
 
 // withSharedLock opens the lock file, acquires a shared flock, calls fn, then
@@ -182,10 +158,21 @@ func (store *Store) withExclusiveLock(fn func() error) error {
 
 // Append normalizes all topics on entry, then serialises it as a single JSON
 // line and appends it to the entries file. A shared flock on <cache-dir>/lock
-// is held for the duration of the write so that concurrent Rewrite calls (which
-// take an exclusive lock) cannot rename the file out from under us mid-write.
-// O_APPEND is used so that concurrent appenders are line-atomic on Linux (a
-// single write of less than PIPE_BUF bytes is guaranteed to be atomic).
+// is held for the duration of the write so that a concurrent Rewrite (which
+// takes an exclusive lock) cannot rename the file out from under us mid-write.
+//
+// Append takes a shared lock rather than an exclusive one because it assumes
+// the caller has already assigned a unique ID, so it does not need to read the
+// existing ID set. Production code should use AppendNew, which generates a
+// collision-free ID under an exclusive lock; Append exists for callers that
+// already hold a unique ID and is currently only used by tests.
+//
+// The shared lock coordinates Append against Rewrite but does not coordinate
+// two concurrent Appends against each other. Their safety in practice rests on
+// gn being a single-user CLI and on the OS appending whole short lines without
+// interleaving, not on any regular-file write atomicity guarantee. (A previous
+// version of this comment cited PIPE_BUF, but that atomicity only applies to
+// pipes and FIFOs, so the claim did not actually hold for the entries file.)
 func (store *Store) Append(entry Entry) error {
 	if err := store.ensureDir(); err != nil {
 		return fmt.Errorf("creating .gnosis directory: %w", err)
@@ -411,7 +398,7 @@ func GenerateID(existing map[string]bool) string {
 	for {
 		id := make([]byte, IDLength)
 		for position := range id {
-			id[position] = alphabet[rand.IntN(len(alphabet))]
+			id[position] = IDAlphabet[rand.IntN(len(IDAlphabet))]
 		}
 		candidate := string(id)
 		if !existing[candidate] {

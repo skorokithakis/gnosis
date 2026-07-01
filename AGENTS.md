@@ -24,8 +24,8 @@ Entries are JSONL on disk with a SQLite FTS5 search index.
 
 ## Conventions
 
-- IDs: 6-char lowercase, alphabet excludes ambiguous letters (see
-  `idAlphabetSet` in `resolve.go`).
+- IDs: 6-char lowercase, alphabet excludes ambiguous letters (exported as
+  `storage.IDAlphabet`).
 - Topics: stored normalized (lowercase, dashes). `NormalizeTopic` is
   the single source of truth.
 - Dispatch rule in `show`: target ≤ 6 chars is an ID prefix, otherwise
