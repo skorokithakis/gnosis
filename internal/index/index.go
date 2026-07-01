@@ -117,7 +117,7 @@ func (index *Index) EnsureFresh() error {
 // Rebuild unconditionally drops and recreates the FTS5 table, loads all
 // entries from the JSONL file, inserts them, and records the JSONL mtime.
 //
-// The shared flock is held across the ReadAll + mtime stat so that a concurrent
+// The shared lock is held across the ReadAll + mtime stat so that a concurrent
 // append cannot land between the two operations and leave the index with a stale
 // mtime that points to a snapshot missing the new entry. An exclusive (rewrite)
 // lock blocks until the shared lock is released, so the mtime we record always

@@ -9,7 +9,6 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"syscall"
 	"time"
 	"unicode"
 
@@ -87,7 +86,7 @@ func (store *Store) entriesPath() string {
 	return filepath.Join(store.gnosisDir, "entries.jsonl")
 }
 
-// lockPath returns the path to the flock file used to serialise rewrites.
+// lockPath returns the path to the lock file used to serialise rewrites.
 // The lock file lives in the cache directory (alongside index.db), not in the
 // repo, because it is purely runtime coordination state.
 func (store *Store) lockPath() string {
@@ -104,13 +103,14 @@ func (store *Store) ensureCacheDir() error {
 	return os.MkdirAll(store.cacheDir, 0o755)
 }
 
-// openLockFile opens (or creates) the lock file and returns it. The caller is
-// responsible for closing it and releasing the flock.
-func (store *Store) openLockFile() (*os.File, error) {
-	return os.OpenFile(store.lockPath(), os.O_WRONLY|os.O_CREATE, 0o644)
+// openLockFile opens (or creates) the lock file and returns a fileLock around
+// it. The caller is responsible for acquiring the lock, releasing it, and
+// closing the file.
+func (store *Store) openLockFile() (*fileLock, error) {
+	return openFileLock(store.lockPath())
 }
 
-// withSharedLock opens the lock file, acquires a shared flock, calls fn, then
+// withSharedLock opens the lock file, acquires a shared lock, calls fn, then
 // releases the lock and closes the file. A shared lock allows concurrent
 // readers and appenders but blocks exclusive (rewrite) lockers. The cache
 // directory is created if it does not exist, because the lock file lives there.
@@ -123,20 +123,21 @@ func (store *Store) withSharedLock(fn func() error) error {
 	if err != nil {
 		return fmt.Errorf("opening lock file: %w", err)
 	}
-	defer lockFile.Close()
+	defer lockFile.close()
 
-	if err := syscall.Flock(int(lockFile.Fd()), syscall.LOCK_SH); err != nil {
+	release, err := lockFile.acquire(false)
+	if err != nil {
 		return fmt.Errorf("acquiring shared lock: %w", err)
 	}
-	defer syscall.Flock(int(lockFile.Fd()), syscall.LOCK_UN) //nolint:errcheck
+	defer release() //nolint:errcheck
 
 	return fn()
 }
 
-// withExclusiveLock opens the lock file, acquires an exclusive flock, calls
-// fn, then releases the lock and closes the file. An exclusive lock blocks all
-// other lockers (both shared and exclusive) until it is released. The cache
-// directory is created if it does not exist, because the lock file lives there.
+// withExclusiveLock opens the lock file, acquires an exclusive lock, calls fn,
+// then releases the lock and closes the file. An exclusive lock blocks all other
+// lockers (both shared and exclusive) until it is released. The cache directory
+// is created if it does not exist, because the lock file lives there.
 func (store *Store) withExclusiveLock(fn func() error) error {
 	if err := store.ensureCacheDir(); err != nil {
 		return fmt.Errorf("creating cache directory: %w", err)
@@ -146,18 +147,19 @@ func (store *Store) withExclusiveLock(fn func() error) error {
 	if err != nil {
 		return fmt.Errorf("opening lock file: %w", err)
 	}
-	defer lockFile.Close()
+	defer lockFile.close()
 
-	if err := syscall.Flock(int(lockFile.Fd()), syscall.LOCK_EX); err != nil {
+	release, err := lockFile.acquire(true)
+	if err != nil {
 		return fmt.Errorf("acquiring exclusive lock: %w", err)
 	}
-	defer syscall.Flock(int(lockFile.Fd()), syscall.LOCK_UN) //nolint:errcheck
+	defer release() //nolint:errcheck
 
 	return fn()
 }
 
 // Append normalizes all topics on entry, then serialises it as a single JSON
-// line and appends it to the entries file. A shared flock on <cache-dir>/lock
+// line and appends it to the entries file. A shared lock on <cache-dir>/lock
 // is held for the duration of the write so that a concurrent Rewrite (which
 // takes an exclusive lock) cannot rename the file out from under us mid-write.
 //
@@ -200,7 +202,7 @@ func (store *Store) Append(entry Entry) error {
 	})
 }
 
-// AppendNew generates a collision-free ID under an exclusive flock, assigns it
+// AppendNew generates a collision-free ID under an exclusive lock, assigns it
 // to entry, and appends the entry atomically. The exclusive lock serialises
 // concurrent writers so that two goroutines cannot independently read the same
 // ID set and generate the same ID. Plain Append (which takes a shared lock) is
@@ -303,9 +305,10 @@ func (store *Store) readAllUnlocked() ([]Entry, error) {
 }
 
 // Rewrite atomically replaces the entire entries file with the given slice.
-// It acquires an exclusive flock on <cache-dir>/lock before writing so that
+// It acquires an exclusive lock on <cache-dir>/lock before writing so that
 // concurrent appenders cannot interleave with the rename. The write goes to a
-// temp file in the same directory so that the final rename is atomic on Linux.
+// temp file in the same directory so that the final rename replaces the
+// entries file in a single step rather than leaving a partially-written file.
 func (store *Store) Rewrite(entries []Entry) error {
 	if err := store.ensureDir(); err != nil {
 		return fmt.Errorf("creating .gnosis directory: %w", err)
@@ -362,7 +365,7 @@ func (store *Store) rewriteUnlocked(entries []Entry) error {
 	return nil
 }
 
-// Update takes an exclusive flock, reads all entries, passes them to transform,
+// Update takes an exclusive lock, reads all entries, passes them to transform,
 // and atomically rewrites the result. The lock is held across the entire
 // read-modify-write cycle so that no concurrent append or rewrite can
 // interleave. This is the correct method for edit and rm operations.
@@ -383,7 +386,7 @@ func (store *Store) Update(transform func([]Entry) []Entry) error {
 	})
 }
 
-// WithSharedLock acquires a shared flock on <cache-dir>/lock and calls fn
+// WithSharedLock acquires a shared lock on <cache-dir>/lock and calls fn
 // while holding it. This allows callers outside the storage package to perform
 // multiple operations atomically under the same shared lock — for example,
 // reading entries and then stat-ing the file mtime in a single critical section.
