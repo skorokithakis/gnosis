@@ -34,6 +34,8 @@ Entries are JSONL on disk with a SQLite FTS5 search index.
   `cmd/gn/main.go`. Do not add color writes outside `termcolor`; do
   route new colored output through it.
 - Tests live next to their code; `go test ./...` runs them.
+- Commits: semantic (conventional commits), with the description
+  starting with a capital letter, e.g. `feat: Add XYZ`.
 
 ## Commands
 
