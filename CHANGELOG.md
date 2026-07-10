@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.5.5](https://github.com/skorokithakis/gnosis/compare/v0.5.4...v0.5.5) (2026-07-10)
+
+
+### Features
+
+* Reject extra positional arguments in gn write ([692a89f](https://github.com/skorokithakis/gnosis/commit/692a89fd52f44331d50d0763dcaebd84e9ffd752))
+
 ## [0.5.4](https://github.com/skorokithakis/gnosis/compare/v0.5.3...v0.5.4) (2026-07-10)
 
 
