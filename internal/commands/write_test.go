@@ -185,6 +185,33 @@ func TestWrite_empty_topic_error(t *testing.T) {
 	}
 }
 
+// TestWrite_author_flag verifies that --author is parsed (position-independently)
+// and stored on the new entry. Passing --author explicitly means the git identity
+// lookup is never consulted, so this test is independent of the test environment's
+// git config.
+func TestWrite_author_flag(t *testing.T) {
+	store := newTestStore(t)
+
+	// Put --author before the text argument to confirm position-independence.
+	if err := commands.Write(store, []string{"some-topic", "--author", "Alice <alice@example.com>", "body text"}, io.Discard); err != nil {
+		t.Fatalf("Write with --author: %v", err)
+	}
+
+	entries, err := store.ReadAll()
+	if err != nil {
+		t.Fatalf("ReadAll: %v", err)
+	}
+	if len(entries) != 1 {
+		t.Fatalf("expected 1 entry, got %d", len(entries))
+	}
+	if entries[0].Author != "Alice <alice@example.com>" {
+		t.Errorf("Author = %q, want %q", entries[0].Author, "Alice <alice@example.com>")
+	}
+	if entries[0].Text != "body text" {
+		t.Errorf("Text = %q, want %q", entries[0].Text, "body text")
+	}
+}
+
 // TestWrite_no_topics_error verifies that omitting the topics argument is rejected.
 func TestWrite_no_topics_error(t *testing.T) {
 	store := newTestStore(t)

@@ -110,6 +110,7 @@ func showByTopic(entries []storage.Entry, target string, allIDs []string, wrapWi
 //	id:      <colored unique-prefix id>
 //	topics:  <cyan topic>, <cyan topic>
 //	related: <colored id>, <colored id>   (omitted when entry.Related is empty)
+//	author:  <free-form "Name <email>">  (omitted when entry.Author is empty)
 //	created: <yellow date>
 //	updated: <yellow date>
 //
@@ -118,6 +119,9 @@ func showByTopic(entries []storage.Entry, target string, allIDs []string, wrapWi
 // Labels are rendered dim/faint. allIDs is the full set of IDs in the store,
 // forwarded to termcolor.UniqueID so it can determine the shortest unique
 // prefix for each ID.
+//
+// The author line is omitted for legacy entries written before the Author
+// field existed, so they keep their original output shape.
 func printEntry(entry storage.Entry, allIDs []string, wrapWidth int, writer io.Writer) {
 	coloredTopics := make([]string, len(entry.Topics))
 	for index, topic := range entry.Topics {
@@ -136,6 +140,10 @@ func printEntry(entry storage.Entry, allIDs []string, wrapWidth int, writer io.W
 			coloredRelated[index] = termcolor.UniqueID(relatedID, allIDs)
 		}
 		fmt.Fprintf(writer, "%s %s\n", termcolor.Dim("related:"), strings.Join(coloredRelated, ", "))
+	}
+
+	if entry.Author != "" {
+		fmt.Fprintf(writer, "%s %s\n", termcolor.Dim("author:"), entry.Author)
 	}
 
 	fmt.Fprintf(writer, "%s %s\n", termcolor.Dim("created:"), termcolor.Date(createdDate))

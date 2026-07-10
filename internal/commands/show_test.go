@@ -101,6 +101,105 @@ func TestShow_by_id_no_related_omits_related_line(t *testing.T) {
 	}
 }
 
+// --- Author line ---
+
+// An entry with a non-empty Author prints an "author:" line carrying the
+// author value. The line must appear after related and before created so the
+// metadata block stays in a stable, scannable order.
+func TestShow_author_printed_when_set(t *testing.T) {
+	store := newTestStore(t)
+	entry := storage.Entry{
+		ID:        "abcdef",
+		Topics:    []string{"keymaster-token-auth"},
+		Text:      "Some text.",
+		Related:   []string{"ghjkmn"},
+		Author:    "Ada Lovelace <ada@example.com>",
+		CreatedAt: baseTime,
+		UpdatedAt: baseTime,
+	}
+	appendEntries(t, store, entry)
+
+	var output strings.Builder
+	if err := commands.Show(store, "abcdef", 0, &output); err != nil {
+		t.Fatalf("Show: %v", err)
+	}
+
+	result := output.String()
+
+	if !strings.Contains(result, "author:") {
+		t.Errorf("output missing author label: %q", result)
+	}
+	if !strings.Contains(result, "Ada Lovelace <ada@example.com>") {
+		t.Errorf("output missing author value: %q", result)
+	}
+
+	// The author line must sit after the related line and before the created
+	// line so the metadata order is deterministic.
+	authorPos := strings.Index(result, "author:")
+	relatedPos := strings.Index(result, "related:")
+	createdPos := strings.Index(result, "created:")
+	if authorPos == -1 || relatedPos == -1 || createdPos == -1 {
+		t.Fatalf("missing one of related/author/created in output: %q", result)
+	}
+	if !(relatedPos < authorPos && authorPos < createdPos) {
+		t.Errorf("author line out of order (related=%d author=%d created=%d): %q", relatedPos, authorPos, createdPos, result)
+	}
+}
+
+// An entry with a non-empty Author still prints the author line even when there
+// are no related entries, confirming the author line is independent of related.
+func TestShow_author_printed_without_related(t *testing.T) {
+	store := newTestStore(t)
+	entry := storage.Entry{
+		ID:        "abcdef",
+		Topics:    []string{"keymaster-token-auth"},
+		Text:      "Some text.",
+		Related:   []string{},
+		Author:    "Grace Hopper <grace@example.com>",
+		CreatedAt: baseTime,
+		UpdatedAt: baseTime,
+	}
+	appendEntries(t, store, entry)
+
+	var output strings.Builder
+	if err := commands.Show(store, "abcdef", 0, &output); err != nil {
+		t.Fatalf("Show: %v", err)
+	}
+
+	result := output.String()
+	if !strings.Contains(result, "author:") {
+		t.Errorf("output missing author label when related is empty: %q", result)
+	}
+	if strings.Contains(result, "related:") {
+		t.Errorf("output should not contain related line when related is empty: %q", result)
+	}
+}
+
+// A legacy entry with an empty Author (the default before the field existed)
+// must omit the author line entirely so old entries keep their original shape.
+func TestShow_author_omitted_when_empty(t *testing.T) {
+	store := newTestStore(t)
+	entry := storage.Entry{
+		ID:        "abcdef",
+		Topics:    []string{"keymaster-token-auth"},
+		Text:      "Some text.",
+		Related:   []string{"ghjkmn"},
+		Author:    "", // legacy entry, no author recorded
+		CreatedAt: baseTime,
+		UpdatedAt: baseTime,
+	}
+	appendEntries(t, store, entry)
+
+	var output strings.Builder
+	if err := commands.Show(store, "abcdef", 0, &output); err != nil {
+		t.Fatalf("Show: %v", err)
+	}
+
+	if strings.Contains(output.String(), "author:") {
+		t.Errorf("output should not contain author line for legacy entry: %q", output.String())
+	}
+}
+
 // --- Show by topic ---
 
 func TestShow_by_topic_finds_entries(t *testing.T) {

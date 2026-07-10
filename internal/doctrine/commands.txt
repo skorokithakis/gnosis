@@ -4,8 +4,10 @@ COMMANDS
   gn help plan           Doctrine for planning — read before starting work.
   gn help review         Guidance for reviewing a session — read after
                              finishing work, before writing entries.
-  gn write <topics> <text> [--related id,id]
+  gn write <topics> <text> [--related id,id] [--author "Name <email>"]
                              Record an entry. Topics are comma-separated.
+                             --author defaults to the git identity, or
+                             "Unknown <unknown@gnosis>" if unavailable.
   gn search <query>      Search entries by keyword.
   gn latest [--limit N]  Show the most recently created entries.
   gn show <id|topic>     Show one entry or all entries for a topic.

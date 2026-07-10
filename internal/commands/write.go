@@ -12,29 +12,39 @@ import (
 	"github.com/skorokithakis/gnosis/internal/termcolor"
 )
 
-// Write implements the "gnosis write <topics> <text> [--related id,id]" command.
-// argv should be os.Args[2:] (everything after "write"). The new entry ID is
-// written to writer, matching the io.Writer pattern used by other commands.
+// Write implements the "gnosis write <topics> <text> [--related id,id] [--author ...]"
+// command. argv should be os.Args[2:] (everything after "write"). The new entry
+// ID is written to writer, matching the io.Writer pattern used by other commands.
 func Write(store *storage.Store, argv []string, writer io.Writer) error {
 	if len(argv) == 0 {
-		return fmt.Errorf("usage: gn write <topics> <text> [--related id,id]")
+		return fmt.Errorf("usage: gn write <topics> <text> [--related id,id] [--author name]")
 	}
 
 	topicsArg := argv[0]
 	argv = argv[1:]
 
-	// Parse --related before consuming the text argument, so that the flag can
-	// appear anywhere after the topics argument.
+	// Parse the position-independent flags (--related, --author) before
+	// consuming the text argument, so that each flag can appear anywhere after
+	// the topics argument. Any token that is not a flag falls through to
+	// "remaining" and the first such token is treated as the text body.
 	var relatedArg string
+	var authorArg string
 	var remaining []string
 	for index := 0; index < len(argv); index++ {
-		if argv[index] == "--related" {
+		switch argv[index] {
+		case "--related":
 			if index+1 >= len(argv) {
 				return fmt.Errorf("--related requires a value")
 			}
 			relatedArg = argv[index+1]
 			index++
-		} else {
+		case "--author":
+			if index+1 >= len(argv) {
+				return fmt.Errorf("--author requires a value")
+			}
+			authorArg = argv[index+1]
+			index++
+		default:
 			remaining = append(remaining, argv[index])
 		}
 	}
@@ -101,12 +111,22 @@ func Write(store *storage.Store, argv []string, writer io.Writer) error {
 
 	now := time.Now().UTC()
 
+	// Resolve the entry author: --author wins, otherwise the git identity, with
+	// a literal fallback that is never empty so the write always succeeds. When
+	// no identity could be determined, warn on stderr (mirroring how the CLI
+	// surfaces other diagnostics) but keep going.
+	author, authorResolved := resolveAuthor(authorArg, defaultGitConfigLookup)
+	if !authorResolved {
+		fmt.Fprintln(os.Stderr, "gn: no git identity found; set git user.name or pass --author")
+	}
+
 	// AppendNew generates the ID atomically under a shared lock, preventing
 	// two concurrent writers from independently reading the same ID set and
 	// generating the same ID.
 	newID, err := store.AppendNew(storage.Entry{
 		Topics:    topics,
 		Text:      text,
+		Author:    author,
 		Related:   related,
 		CreatedAt: now,
 		UpdatedAt: now,

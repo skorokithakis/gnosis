@@ -305,6 +305,102 @@ func TestRoundTrip(t *testing.T) {
 	}
 }
 
+// --- Author field round-trip ---
+
+// TestAuthor_round_trip verifies that the Author field survives a full
+// write-read cycle both when set and when empty, and that the omitempty tag
+// keeps the "author" key out of the JSONL line when Author is empty so that
+// legacy entries (written before the field existed) round-trip unchanged.
+func TestAuthor_round_trip(t *testing.T) {
+	store := newTestStore(t)
+	gnosisDir := store.GnosisDir()
+
+	// One entry with an author, one without.
+	withAuthor := sampleEntry("aaaaaa")
+	withAuthor.Author = "alice"
+	withoutAuthor := sampleEntry("bbbbbb") // Author left as the zero value ""
+
+	for _, entry := range []storage.Entry{withAuthor, withoutAuthor} {
+		if err := store.Append(entry); err != nil {
+			t.Fatalf("Append: %v", err)
+		}
+	}
+
+	got, err := store.ReadAll()
+	if err != nil {
+		t.Fatalf("ReadAll: %v", err)
+	}
+	if len(got) != 2 {
+		t.Fatalf("expected 2 entries, got %d", len(got))
+	}
+	if got[0].Author != "alice" {
+		t.Errorf("entry aaaaaa: Author = %q, want %q", got[0].Author, "alice")
+	}
+	if got[1].Author != "" {
+		t.Errorf("entry bbbbbb: Author = %q, want %q", got[1].Author, "")
+	}
+
+	// The on-disk JSONL must omit "author" for the empty entry (so legacy
+	// entries without the field round-trip byte-for-byte unchanged) but
+	// include it for the populated one.
+	raw, err := os.ReadFile(filepath.Join(gnosisDir, "entries.jsonl"))
+	if err != nil {
+		t.Fatalf("ReadFile: %v", err)
+	}
+	lines := strings.Split(strings.TrimRight(string(raw), "\n"), "\n")
+	if len(lines) != 2 {
+		t.Fatalf("expected 2 JSONL lines, got %d", len(lines))
+	}
+	if !strings.Contains(lines[0], `"author":"alice"`) {
+		t.Errorf("entry aaaaaa: expected JSON to contain author, got %q", lines[0])
+	}
+	if strings.Contains(lines[1], "author") {
+		t.Errorf("entry bbbbbb: expected JSON to omit author key, got %q", lines[1])
+	}
+}
+
+// TestAuthor_legacy_entry_without_field verifies that a JSONL line written
+// before the Author field existed (i.e. with no "author" key at all) reads back
+// with an empty Author and stays author-less after a rewrite, so existing data
+// needs no migration.
+func TestAuthor_legacy_entry_without_field(t *testing.T) {
+	store := newTestStore(t)
+	gnosisDir := store.GnosisDir()
+
+	if err := os.MkdirAll(gnosisDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll: %v", err)
+	}
+	legacyLine := `{"id":"aaaaaa","topics":["billing"],"text":"t","related":[],"created_at":"2026-01-01T00:00:00Z","updated_at":"2026-01-01T00:00:00Z"}` + "\n"
+	entriesPath := filepath.Join(gnosisDir, "entries.jsonl")
+	if err := os.WriteFile(entriesPath, []byte(legacyLine), 0o644); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+
+	got, err := store.ReadAll()
+	if err != nil {
+		t.Fatalf("ReadAll: %v", err)
+	}
+	if len(got) != 1 {
+		t.Fatalf("expected 1 entry, got %d", len(got))
+	}
+	if got[0].Author != "" {
+		t.Errorf("legacy entry: Author = %q, want %q", got[0].Author, "")
+	}
+
+	// Re-write the entry unchanged and confirm the author key is still absent,
+	// proving legacy entries round-trip without being mutated.
+	if err := store.Rewrite(got); err != nil {
+		t.Fatalf("Rewrite: %v", err)
+	}
+	rewritten, err := os.ReadFile(entriesPath)
+	if err != nil {
+		t.Fatalf("ReadFile: %v", err)
+	}
+	if strings.Contains(string(rewritten), "author") {
+		t.Errorf("legacy entry gained an author key after rewrite: %q", string(rewritten))
+	}
+}
+
 func TestReadAll_empty_store(t *testing.T) {
 	store := newTestStore(t)
 	entries, err := store.ReadAll()

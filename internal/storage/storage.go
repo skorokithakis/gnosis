@@ -36,6 +36,7 @@ type Entry struct {
 	ID        string    `json:"id"`
 	Topics    []string  `json:"topics"`
 	Text      string    `json:"text"`
+	Author    string    `json:"author,omitempty"`
 	Related   []string  `json:"related"`
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`

@@ -117,10 +117,12 @@ changed. Don't leave contradictions in the system.
 
 WRITING
 
-  gn write <topics> "<text>" [--related id,id]
+  gn write <topics> "<text>" [--related id,id] [--author "Name <email>"]
 
 Topics are comma-separated. Use names that match the system's shape.
 If an entry relates to an existing one, use --related to link them.
+--author defaults to the git identity, or "Unknown <unknown@gnosis>"
+if unavailable.
 
 Example:
   gn write search-endpoint,caching "We added a 60s TTL cache to
