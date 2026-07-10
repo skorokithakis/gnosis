@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.5.4](https://github.com/skorokithakis/gnosis/compare/v0.5.3...v0.5.4) (2026-07-10)
+
+
+### Features
+
+* add author attribution to entries ([a9382b8](https://github.com/skorokithakis/gnosis/commit/a9382b81d5e03c0acf6d05672b4d4cd95931c935))
+* add Windows support ([c24d99b](https://github.com/skorokithakis/gnosis/commit/c24d99b9324ced5ce5749e0a87d962f533a2375f))
+
 ## [0.5.3](https://github.com/skorokithakis/gnosis/compare/v0.5.2...v0.5.3) (2026-05-23)
 
 
