@@ -271,6 +271,104 @@ func TestWrite_multibyte_topic_length_uses_rune_count(t *testing.T) {
 	}
 }
 
+// TestWrite_too_many_positional_args verifies that passing more than one
+// positional text argument is rejected rather than silently discarded. The
+// user most likely forgot to quote multi-word text, so the error should hint
+// at shell quoting. Nothing should be written in this case.
+func TestWrite_too_many_positional_args(t *testing.T) {
+	store := newTestStore(t)
+
+	err := commands.Write(store, []string{"some-topic", "first", "second"}, io.Discard)
+	if err == nil {
+		t.Fatal("expected error for multiple positional text arguments, got nil")
+	}
+	if !strings.Contains(err.Error(), "quote") {
+		t.Errorf("error should suggest shell quoting, got: %v", err)
+	}
+
+	// Nothing should have been written.
+	entries, err := store.ReadAll()
+	if err != nil {
+		t.Fatalf("ReadAll: %v", err)
+	}
+	if len(entries) != 0 {
+		t.Errorf("expected 0 entries after rejected write, got %d", len(entries))
+	}
+}
+
+// TestWrite_related_flexibility_preserved verifies that the --related flag and
+// its value do not count as positional text arguments, so it may appear before
+// or after the single positional text argument without being rejected.
+func TestWrite_related_flexibility_preserved(t *testing.T) {
+	cases := []struct {
+		name string
+		argv []string
+	}{
+		{"text then related", []string{"some-topic", "the text", "--related", ""}},
+		{"related then text", []string{"some-topic", "--related", "", "the text"}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			store := newTestStore(t)
+
+			// Seed a first entry to obtain a real ID to reference.
+			if err := commands.Write(store, []string{"some-topic", "first entry"}, io.Discard); err != nil {
+				t.Fatalf("Write first entry: %v", err)
+			}
+			entries, err := store.ReadAll()
+			if err != nil {
+				t.Fatalf("ReadAll: %v", err)
+			}
+			existingID := entries[0].ID
+
+			// Substitute the placeholder with the real ID.
+			for i, v := range tc.argv {
+				if v == "" {
+					tc.argv[i] = existingID
+				}
+			}
+
+			if err := commands.Write(store, tc.argv, io.Discard); err != nil {
+				t.Fatalf("Write with --related placement %q: %v", tc.name, err)
+			}
+
+			all, err := store.ReadAll()
+			if err != nil {
+				t.Fatalf("ReadAll: %v", err)
+			}
+			if len(all) != 2 {
+				t.Fatalf("expected 2 entries, got %d", len(all))
+			}
+			newEntry := all[1]
+			if newEntry.Text != "the text" {
+				t.Errorf("unexpected text: %q", newEntry.Text)
+			}
+			if len(newEntry.Related) != 1 || newEntry.Related[0] != existingID {
+				t.Errorf("expected related [%s], got %v", existingID, newEntry.Related)
+			}
+		})
+	}
+}
+
+// TestWrite_single_text_with_spaces verifies that a single quoted positional
+// argument containing spaces is accepted (the case the error message points
+// users toward).
+func TestWrite_single_text_with_spaces(t *testing.T) {
+	store := newTestStore(t)
+
+	if err := commands.Write(store, []string{"some-topic", "hello world with spaces"}, io.Discard); err != nil {
+		t.Fatalf("Write with single quoted text: %v", err)
+	}
+
+	entries, err := store.ReadAll()
+	if err != nil {
+		t.Fatalf("ReadAll: %v", err)
+	}
+	if entries[0].Text != "hello world with spaces" {
+		t.Errorf("unexpected text: %q", entries[0].Text)
+	}
+}
+
 // TestWrite_topic_normalizes_to_empty_error verifies that a topic whose
 // normalized form is empty (e.g. "---") is rejected rather than stored as an
 // empty string.

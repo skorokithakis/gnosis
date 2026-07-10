@@ -49,8 +49,13 @@ func Write(store *storage.Store, argv []string, writer io.Writer) error {
 		}
 	}
 
-	// The text is the first non-flag argument. If absent and stdin is not a
-	// TTY, read from stdin so that piped input works (e.g. echo ... | gnosis write foo).
+	// The text is the first non-flag argument. More than one positional text
+	// argument is rejected — the user almost certainly forgot to quote
+	// multi-word text. We point them at shell quoting rather than silently
+	// discarding the extra arguments.
+	if len(remaining) > 1 {
+		return fmt.Errorf("write takes a single text argument but received %d; quote multi-word text with single or double quotes", len(remaining))
+	}
 	var text string
 	if len(remaining) > 0 {
 		text = remaining[0]
