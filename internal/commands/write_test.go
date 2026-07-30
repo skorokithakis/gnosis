@@ -3,10 +3,12 @@ package commands_test
 import (
 	"io"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/skorokithakis/gnosis/internal/commands"
+	"github.com/skorokithakis/gnosis/internal/storage"
 )
 
 func TestWrite_basic(t *testing.T) {
@@ -52,6 +54,77 @@ func TestWrite_output_contains_id(t *testing.T) {
 	output := strings.TrimSpace(buf.String())
 	if len(output) != 6 {
 		t.Errorf("expected 6-char ID in output, got %q", output)
+	}
+}
+
+func TestWrite_createdGnosisHint(t *testing.T) {
+	captureStderr := func(fn func()) string {
+		t.Helper()
+		reader, writer, err := os.Pipe()
+		if err != nil {
+			t.Fatalf("os.Pipe: %v", err)
+		}
+		defer reader.Close()
+
+		originalStderr := os.Stderr
+		os.Stderr = writer
+		defer func() { os.Stderr = originalStderr }()
+		fn()
+		os.Stderr = originalStderr
+		if err := writer.Close(); err != nil {
+			t.Fatalf("closing stderr pipe: %v", err)
+		}
+
+		output, err := io.ReadAll(reader)
+		if err != nil {
+			t.Fatalf("reading stderr pipe: %v", err)
+		}
+		return string(output)
+	}
+
+	store := newTestStore(t)
+	var stdout strings.Builder
+	var writeErr error
+	stderr := captureStderr(func() {
+		writeErr = commands.Write(store, []string{"some-topic", "first entry", "--author", "Test Author"}, &stdout)
+	})
+	if writeErr != nil {
+		t.Fatalf("Write: %v", writeErr)
+	}
+	if len(strings.TrimSpace(stdout.String())) != 6 {
+		t.Errorf("stdout should contain only the entry ID, got %q", stdout.String())
+	}
+	const hint = "gn: created .gnosis/ — add it to version control.\n"
+	if stderr != hint {
+		t.Errorf("stderr = %q, want %q", stderr, hint)
+	}
+
+	stderr = captureStderr(func() {
+		writeErr = commands.Write(store, []string{"some-topic", "second entry", "--author", "Test Author"}, io.Discard)
+	})
+	if writeErr != nil {
+		t.Fatalf("second Write: %v", writeErr)
+	}
+	if stderr != "" {
+		t.Errorf("unexpected hint on subsequent write: %q", stderr)
+	}
+
+	blockedParent := filepath.Join(t.TempDir(), "blocked")
+	if err := os.WriteFile(blockedParent, nil, 0o644); err != nil {
+		t.Fatalf("creating blocked parent: %v", err)
+	}
+	failedStore, err := storage.NewStoreAt(filepath.Join(blockedParent, ".gnosis"), t.TempDir())
+	if err != nil {
+		t.Fatalf("NewStoreAt: %v", err)
+	}
+	stderr = captureStderr(func() {
+		writeErr = commands.Write(failedStore, []string{"some-topic", "failed entry", "--author", "Test Author"}, io.Discard)
+	})
+	if writeErr == nil {
+		t.Fatal("expected Write to fail")
+	}
+	if stderr != "" {
+		t.Errorf("unexpected hint after failed write: %q", stderr)
 	}
 }
 

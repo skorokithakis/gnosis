@@ -10,68 +10,32 @@ to be broken, and what people intend to change but haven't yet.
 gnosis records these intangibles so they survive context switches,
 personnel changes, and the passage of time.
 
-RECORD WHAT THE HUMAN KNOWS
+WHAT BELONGS HERE
 
-This is the most important filter for deciding what to record.
+Two questions decide whether something is worth recording:
 
-You — the agent — will be here next session with the same reasoning
-ability, the same access to the code, and the same general knowledge.
-The human might not. Their context is perishable: business reasons,
-organizational constraints, things they tried last quarter, intent
-they haven't acted on yet, operational lessons from production. If
-they don't tell you and nobody writes it down, it's gone.
+1. Could a competent agent, given the code and the existing
+   documentation, reach this conclusion on its own? If yes, don't
+   record it — it's already reproducible. You will be here next
+   session with the same reasoning ability and the same access to the
+   code. The human's context is what's perishable: business reasons,
+   organizational history, what they tried last quarter, operational
+   lessons from production. Record what came from them, or from
+   empirical observation you couldn't reconstruct from the code — not
+   your own analysis of the codebase.
 
-Before recording anything, ask: would a competent agent, given the
-code and existing documentation, reach this same conclusion on its
-own? If yes, don't write it down — it's already reproducible. Reach
-for gnosis only when the knowledge originated from the human or from
-empirical observation that can't be reconstructed from the code.
+2. Does it have an obvious code anchor — a line, function, or file
+   where someone editing the code would see it? If yes, write a
+   comment there instead. The person at risk of undoing a non-obvious
+   decision is the one editing that line, and they won't think to
+   search gnosis first.
 
-Strongly prefer recording knowledge that came from the human's mouth
-over your own reasoning about the codebase. Your analysis is
-reproducible; their context isn't.
+Reach for gnosis when the knowledge isn't reproducible and has no such
+anchor: it spans several files, lives outside the code entirely, or
+concerns something that was considered and never built.
 
-PREFER A CODE COMMENT FIRST
-
-When a piece of "why" attaches to a specific line, function, or file,
-a comment right next to the code is almost always the better home.
-The person at risk of undoing a non-obvious decision is the one
-editing that line — they will see a comment, but they won't think to
-search gnosis first.
-
-Before writing a gnosis entry, ask: does this have an obvious code
-anchor? If yes, make it a comment. Reach for gnosis only when the
-knowledge has no such anchor — it spans multiple files, lives outside
-the code entirely, or concerns something that was considered and not
-built.
-
-WHAT TO RECORD IN GNOSIS
-
-  - A cross-cutting decision that shaped several parts of the system.
-  - An alternative that was considered and rejected (and so has no
-    code to attach a comment to).
-  - An intent to change something that hasn't happened yet.
-  - A non-obvious constraint from outside the code — a vendor quirk,
-    a regulatory requirement, an operational gotcha.
-  - A lesson learned the hard way that isn't pinned to one spot.
-  - Something the human told you that you couldn't have inferred
-    from the codebase alone.
-
-WHAT NOT TO RECORD
-
-If someone reading the code or existing documentation would learn it,
-don't put it here. Duplication rots. The value of gnosis is that it
-holds what isn't written anywhere else.
-
-Don't record:
-  - A "why" that belongs as a comment on a specific line or function.
-  - How a function works (that's what the code is for).
-  - API contracts or configuration (that's documentation).
-  - TODOs that belong in a ticket tracker.
-  - Anything that will be stale in a week — that's status, not
-    knowledge.
-  - Your own analysis or reasoning about the code. You'll have that
-    again next session; the human's context is what's perishable.
+"gn help review" has the full criteria and worked examples. Read it
+before you record anything.
 
 THE AGENT LOOP
 
@@ -90,7 +54,8 @@ If you are an AI agent, gnosis has three touchpoints in your workflow:
    Read what comes back. If any recorded decision conflicts with your
    plan, surface it to the user before proceeding. The recorded
    decision may still hold, may be stale, or may need explicit
-   supersession — but don't silently contradict it.
+   supersession — but don't silently contradict it. See "gn help
+   review" for how to supersede an entry.
 
 2. During work:
    If a decision is made or an alternative is explicitly rejected,
@@ -100,13 +65,6 @@ If you are an AI agent, gnosis has three touchpoints in your workflow:
 
 3. After finishing work:
    Run "gn help review" and follow its guidance.
-
-TIDYING
-
-Stale knowledge is worse than no knowledge. When a recorded decision
-is overturned, either remove the old entry ("gn rm") or write a
-new one that references it ("gn write ... --related <old-id>")
-explaining what changed. Don't leave contradictions in the system.
 
 TOPICS
 

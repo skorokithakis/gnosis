@@ -125,6 +125,14 @@ func Write(store *storage.Store, argv []string, writer io.Writer) error {
 		fmt.Fprintln(os.Stderr, "gn: no git identity found; set git user.name or pass --author")
 	}
 
+	// The .gnosis directory is created lazily by the write below, so if it is
+	// absent now then this is the repo's first entry and the user needs to add
+	// the new directory to version control. Any other stat failure simply
+	// suppresses the hint; it must never fail the write, as the hint is
+	// cosmetic.
+	_, statErr := os.Stat(store.GnosisDir())
+	gnosisDirDidNotExist := os.IsNotExist(statErr)
+
 	// AppendNew generates the ID atomically under a shared lock, preventing
 	// two concurrent writers from independently reading the same ID set and
 	// generating the same ID.
@@ -138,6 +146,9 @@ func Write(store *storage.Store, argv []string, writer io.Writer) error {
 	})
 	if err != nil {
 		return fmt.Errorf("appending entry: %w", err)
+	}
+	if gnosisDirDidNotExist {
+		fmt.Fprintln(os.Stderr, "gn: created .gnosis/ — add it to version control.")
 	}
 
 	// Re-read all entries (which now includes the just-written one) so that

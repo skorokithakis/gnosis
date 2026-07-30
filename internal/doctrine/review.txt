@@ -41,11 +41,25 @@ Scan the session for moments where:
   - A pain point or known flaw was mentioned in passing that doesn't
     pin to one spot.
   - Someone expressed intent to change something later.
-  - A non-obvious external constraint came up that shaped the
-    implementation.
+  - A non-obvious constraint from outside the code shaped the work —
+    a vendor quirk, a regulatory requirement, an operational gotcha.
   - Something was learned about the system's behavior that isn't
     captured in the code that was written and doesn't have a natural
     home as a comment.
+
+WHAT NOT TO RECORD
+
+If someone reading the code or existing documentation would learn it,
+don't put it here. Duplication rots. The value of gnosis is that it
+holds what isn't written anywhere else. Don't record:
+  - A "why" that belongs as a comment on a specific line or function.
+  - How a function works (that's what the code is for).
+  - API contracts or configuration (that's documentation).
+  - TODOs that belong in a ticket tracker.
+  - Anything that will be stale in a week — that's status, not
+    knowledge.
+  - Your own analysis or reasoning about the code. You'll have that
+    again next session; the human's context is what's perishable.
 
 RECORD OR NOT?
 
@@ -57,13 +71,6 @@ RECORD OR NOT?
   that without duplicating data across three tables."
   → Yes, if the human told you this. If you inferred it from the
     schema, the next agent will too — that entry is noise.
-
-  "The user model has a 'role' field."
-  → No. Read the code.
-
-  "The 'role' field is a plain string instead of a foreign key because
-  roles come from an external IdP and we don't want to sync them."
-  → Yes. That's a decision with non-obvious reasoning.
 
   "The tests are slow."
   → No. Too vague, and anyone running them will notice.
@@ -78,15 +85,6 @@ RECORD OR NOT?
   treats as truthy."
   → No — make it a comment on that line. The person who'd "simplify"
     it is editing that exact line; a gnosis entry won't catch them.
-
-  "I added a cache to the search endpoint."
-  → No. The code shows this.
-
-  "We added a cache to search because uncached p99 was 800ms and the
-  SLA is 200ms. We chose a 60s TTL as a compromise — stale results
-  are acceptable for this use case but the product team doesn't want
-  them older than a minute."
-  → Yes. The constraints and tradeoff reasoning aren't in the code.
 
   "SQLite is a good fit here because the data is single-writer and
   the dataset fits in memory."
@@ -104,9 +102,6 @@ A few precise entries are worth more than a wall of noise. Each entry
 should carry enough context that someone encountering it months later
 understands why it matters without needing the original conversation.
 
-If something is already in the code you wrote, the commit message, or
-existing documentation, it doesn't belong here.
-
 TIDYING
 
 Stale knowledge is worse than no knowledge. If during your review you
@@ -117,14 +112,13 @@ changed. Don't leave contradictions in the system.
 
 WRITING
 
-  gn write <topics> "<text>" [--related id,id] [--author "Name <email>"]
+Use topic names that match the system's shape. If an entry relates to
+an existing one, use --related to link them.
 
-Topics are comma-separated. Use names that match the system's shape.
-If an entry relates to an existing one, use --related to link them.
---author defaults to the git identity, or "Unknown <unknown@gnosis>"
-if unavailable.
-
-Example:
   gn write search-endpoint,caching "We added a 60s TTL cache to
   search because uncached p99 was 800ms against a 200ms SLA. Stale
   results are acceptable but product wants them under a minute."
+
+Commit the .gnosis directory along with your work — entries are shared
+knowledge, and nothing in there needs to be ignored. If this was the
+repo's first entry, .gnosis/ is new and untracked; add it.
