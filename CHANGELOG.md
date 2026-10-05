@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.5.5](https://github.com/skorokithakis/gnosis/compare/v0.5.4...v0.5.5) (2026-10-05)
+
+
+### Features
+
+* Reject extra positional arguments in gn write ([692a89f](https://github.com/skorokithakis/gnosis/commit/692a89fd52f44331d50d0763dcaebd84e9ffd752))
+* Tell the agent to commit the .gnosis directory ([4bf572d](https://github.com/skorokithakis/gnosis/commit/4bf572d00a32223f8d8f5fd03470b3011ce71e17))
+
 ## [0.5.4](https://github.com/skorokithakis/gnosis/compare/v0.5.3...v0.5.4) (2026-07-10)
 
 
