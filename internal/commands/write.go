@@ -133,7 +133,7 @@ func Write(store *storage.Store, argv []string, writer io.Writer) error {
 	_, statErr := os.Stat(store.GnosisDir())
 	gnosisDirDidNotExist := os.IsNotExist(statErr)
 
-	// AppendNew generates the ID atomically under a shared lock, preventing
+	// AppendNew generates the ID atomically under an exclusive lock, preventing
 	// two concurrent writers from independently reading the same ID set and
 	// generating the same ID.
 	newID, err := store.AppendNew(storage.Entry{

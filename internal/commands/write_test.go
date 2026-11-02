@@ -412,7 +412,14 @@ func TestWrite_related_flexibility_preserved(t *testing.T) {
 			if len(all) != 2 {
 				t.Fatalf("expected 2 entries, got %d", len(all))
 			}
-			newEntry := all[1]
+			// entries.jsonl is stored in ID order, not insertion order, so find
+			// the new entry by ID rather than relying on its position.
+			var newEntry storage.Entry
+			for _, entry := range all {
+				if entry.ID != existingID {
+					newEntry = entry
+				}
+			}
 			if newEntry.Text != "the text" {
 				t.Errorf("unexpected text: %q", newEntry.Text)
 			}

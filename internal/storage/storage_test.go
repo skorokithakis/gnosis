@@ -1,7 +1,7 @@
 package storage_test
 
 import (
-	"bytes"
+	"bufio"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -68,146 +68,66 @@ func TestReadAll_does_not_create_gnosisDir(t *testing.T) {
 	}
 }
 
-// --- .gitattributes merge rule ---
+// --- entries.jsonl ordering ---
 
-const gitattributesContent = "*.jsonl merge=union\n"
-
-// TestWritePaths_create_gitattributes verifies that every write path creates
-// .gnosis/.gitattributes with the union-merge rule. Append covers plain
-// appends; AppendNew covers gn write; Rewrite and Update cover gn edit/rm.
-func TestWritePaths_create_gitattributes(t *testing.T) {
+// TestWritePaths_keep_entries_sorted_by_ID verifies that every write path
+// (Append, AppendNew, Rewrite, Update) leaves entries.jsonl in ascending ID
+// order, including when the file on disk was unsorted beforehand.
+func TestWritePaths_keep_entries_sorted_by_ID(t *testing.T) {
 	operations := []struct {
 		name string
 		run  func(store *storage.Store) error
 	}{
 		{"Append", func(store *storage.Store) error {
-			return store.Append(sampleEntry("aaaaaa"))
+			return store.Append(sampleEntry("dddddd"))
 		}},
 		{"AppendNew", func(store *storage.Store) error {
 			_, err := store.AppendNew(sampleEntry(""))
 			return err
 		}},
 		{"Rewrite", func(store *storage.Store) error {
-			return store.Rewrite([]storage.Entry{sampleEntry("aaaaaa")})
+			return store.Rewrite([]storage.Entry{
+				sampleEntry("cccccc"),
+				sampleEntry("aaaaaa"),
+				sampleEntry("bbbbbb"),
+			})
 		}},
 		{"Update", func(store *storage.Store) error {
 			return store.Update(func(entries []storage.Entry) []storage.Entry {
-				return append(entries, sampleEntry("aaaaaa"))
+				return append(entries, sampleEntry("dddddd"))
 			})
 		}},
 	}
 
 	for _, operation := range operations {
 		t.Run(operation.name, func(t *testing.T) {
-			gnosisDir := filepath.Join(t.TempDir(), ".gnosis")
-			store, err := storage.NewStoreAt(gnosisDir, t.TempDir())
-			if err != nil {
-				t.Fatalf("NewStoreAt: %v", err)
-			}
+			store := newTestStore(t)
+			writeUnsortedEntriesFile(t, store)
 
 			if err := operation.run(store); err != nil {
 				t.Fatalf("%s: %v", operation.name, err)
 			}
 
-			content, err := os.ReadFile(filepath.Join(gnosisDir, ".gitattributes"))
-			if err != nil {
-				t.Fatalf("reading .gitattributes: %v", err)
-			}
-			if string(content) != gitattributesContent {
-				t.Errorf(".gitattributes content = %q, want %q", string(content), gitattributesContent)
+			ids := fileIDs(t, store)
+			for index := 1; index < len(ids); index++ {
+				if ids[index-1] >= ids[index] {
+					t.Fatalf("entry IDs are not in ascending order: %v", ids)
+				}
 			}
 		})
 	}
 }
 
-// TestAppend_gitattributes_hint_printed_once verifies that the hint for a
-// newly created .gitattributes is printed exactly once, even though a command
-// may create or touch the directory several times.
-func TestAppend_gitattributes_hint_printed_once(t *testing.T) {
-	store := newTestStore(t)
-	var stderr bytes.Buffer
-	store.SetStderr(&stderr)
+// writeUnsortedEntriesFile writes cccccc, aaaaaa, bbbbbb to entries.jsonl in
+// that order, bypassing the store so that the file starts out unsorted.
+func writeUnsortedEntriesFile(t *testing.T, store *storage.Store) {
+	t.Helper()
 
-	for range 2 {
-		if err := store.Append(sampleEntry("aaaaaa")); err != nil {
-			t.Fatalf("Append: %v", err)
-		}
-	}
-
-	const hint = "gn: created .gnosis/.gitattributes — add it to version control.\n"
-	if count := strings.Count(stderr.String(), hint); count != 1 {
-		t.Errorf("hint printed %d times, want 1; stderr = %q", count, stderr.String())
-	}
-}
-
-// TestAppend_preserves_existing_gitattributes verifies that an existing
-// .gitattributes is left untouched and produces no hint, because the user may
-// have added their own rules to it.
-func TestAppend_preserves_existing_gitattributes(t *testing.T) {
-	gnosisDir := filepath.Join(t.TempDir(), ".gnosis")
-	if err := os.MkdirAll(gnosisDir, 0o755); err != nil {
+	if err := os.MkdirAll(store.GnosisDir(), 0o755); err != nil {
 		t.Fatalf("MkdirAll: %v", err)
 	}
-	const customContent = "# user rules\n*.jsonl merge=union\n"
-	gitattributesPath := filepath.Join(gnosisDir, ".gitattributes")
-	if err := os.WriteFile(gitattributesPath, []byte(customContent), 0o644); err != nil {
-		t.Fatalf("WriteFile: %v", err)
-	}
-
-	store, err := storage.NewStoreAt(gnosisDir, t.TempDir())
-	if err != nil {
-		t.Fatalf("NewStoreAt: %v", err)
-	}
-	var stderr bytes.Buffer
-	store.SetStderr(&stderr)
-
-	if err := store.Append(sampleEntry("aaaaaa")); err != nil {
-		t.Fatalf("Append: %v", err)
-	}
-
-	content, err := os.ReadFile(gitattributesPath)
-	if err != nil {
-		t.Fatalf("reading .gitattributes: %v", err)
-	}
-	if string(content) != customContent {
-		t.Errorf(".gitattributes was modified: got %q, want %q", string(content), customContent)
-	}
-	if stderr.Len() != 0 {
-		t.Errorf("expected no hint for an existing .gitattributes, got %q", stderr.String())
-	}
-}
-
-// TestReadAll_does_not_create_gitattributes verifies that read-only access
-// does not create the merge rule: only writes may create files.
-func TestReadAll_does_not_create_gitattributes(t *testing.T) {
-	gnosisDir := filepath.Join(t.TempDir(), ".gnosis")
-	store, err := storage.NewStoreAt(gnosisDir, t.TempDir())
-	if err != nil {
-		t.Fatalf("NewStoreAt: %v", err)
-	}
-
-	if _, err := store.ReadAll(); err != nil {
-		t.Fatalf("ReadAll: %v", err)
-	}
-
-	if _, err := os.Stat(filepath.Join(gnosisDir, ".gitattributes")); !os.IsNotExist(err) {
-		t.Errorf("ReadAll must not create .gitattributes; stat error = %v", err)
-	}
-}
-
-// TestReadAll_warns_once_per_duplicated_id verifies that duplicate lines (as
-// left behind by a union merge) produce exactly one warning per duplicated ID
-// per store, even though a command reads the store several times, and that the
-// warning reports the correct line count.
-func TestReadAll_warns_once_per_duplicated_id(t *testing.T) {
-	gnosisDir := filepath.Join(t.TempDir(), ".gnosis")
-	if err := os.MkdirAll(gnosisDir, 0o755); err != nil {
-		t.Fatalf("MkdirAll: %v", err)
-	}
-
-	// abcdef appears three times, pqrstu twice, and ghjkmn once.
 	var lines strings.Builder
-	for _, id := range []string{"abcdef", "abcdef", "ghjkmn", "pqrstu", "abcdef", "pqrstu"} {
+	for _, id := range []string{"cccccc", "aaaaaa", "bbbbbb"} {
 		line, err := json.Marshal(sampleEntry(id))
 		if err != nil {
 			t.Fatalf("marshalling entry: %v", err)
@@ -215,42 +135,34 @@ func TestReadAll_warns_once_per_duplicated_id(t *testing.T) {
 		lines.Write(line)
 		lines.WriteByte('\n')
 	}
-	entriesPath := filepath.Join(gnosisDir, "entries.jsonl")
-	if err := os.WriteFile(entriesPath, []byte(lines.String()), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(store.GnosisDir(), "entries.jsonl"), []byte(lines.String()), 0o644); err != nil {
 		t.Fatalf("WriteFile: %v", err)
 	}
+}
 
-	store, err := storage.NewStoreAt(gnosisDir, t.TempDir())
+// fileIDs returns the entry IDs from entries.jsonl in file order.
+func fileIDs(t *testing.T, store *storage.Store) []string {
+	t.Helper()
+
+	file, err := os.Open(filepath.Join(store.GnosisDir(), "entries.jsonl"))
 	if err != nil {
-		t.Fatalf("NewStoreAt: %v", err)
+		t.Fatalf("opening entries file: %v", err)
 	}
-	var stderr bytes.Buffer
-	store.SetStderr(&stderr)
+	defer file.Close()
 
-	for range 2 {
-		entries, err := store.ReadAll()
-		if err != nil {
-			t.Fatalf("ReadAll: %v", err)
+	var ids []string
+	scanner := bufio.NewScanner(file)
+	for scanner.Scan() {
+		var entry storage.Entry
+		if err := json.Unmarshal(scanner.Bytes(), &entry); err != nil {
+			t.Fatalf("parsing entry: %v", err)
 		}
-		if len(entries) != 6 {
-			t.Fatalf("expected 6 entries (duplicates are tolerated), got %d", len(entries))
-		}
+		ids = append(ids, entry.ID)
 	}
-
-	const tripleWarning = "gn: entry abcdef appears on 3 lines in .gnosis/entries.jsonl (probably from a git merge); remove the stale line by hand.\n"
-	const doubleWarning = "gn: entry pqrstu appears on 2 lines in .gnosis/entries.jsonl (probably from a git merge); remove the stale line by hand.\n"
-	if count := strings.Count(stderr.String(), tripleWarning); count != 1 {
-		t.Errorf("triple-duplicate warning printed %d times, want 1; stderr = %q", count, stderr.String())
+	if err := scanner.Err(); err != nil {
+		t.Fatalf("reading entries file: %v", err)
 	}
-	if count := strings.Count(stderr.String(), doubleWarning); count != 1 {
-		t.Errorf("double-duplicate warning printed %d times, want 1; stderr = %q", count, stderr.String())
-	}
-	if strings.Contains(stderr.String(), "ghjkmn") {
-		t.Errorf("unique ID should not be warned about; stderr = %q", stderr.String())
-	}
-	if got := strings.Count(stderr.String(), "\n"); got != 2 {
-		t.Errorf("expected exactly 2 warnings, got %d; stderr = %q", got, stderr.String())
-	}
+	return ids
 }
 
 // newTestStore creates a Store backed by a temporary directory and returns both
@@ -660,8 +572,9 @@ func TestConcurrentAppend(t *testing.T) {
 // Before the fix, Rewrite held the exclusive lock only during the rename, so
 // appends that arrived between ReadAll and the rename went to the old file and
 // were overwritten. After the fix, Update holds the exclusive lock across the
-// entire read-modify-write cycle, and Append holds a shared lock for the
-// duration of the write, so the two operations are properly serialised.
+// entire read-modify-write cycle, and Append holds the exclusive lock for the
+// duration of its read-modify-write rewrite, so the two operations are properly
+// serialised.
 //
 // This test MUST fail against the old code (where Append has no lock and
 // Rewrite only locks during the rename) and pass against the new code.

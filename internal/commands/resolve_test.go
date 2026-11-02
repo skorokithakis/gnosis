@@ -80,28 +80,6 @@ func TestResolveIDPrefix_ambiguous_returns_candidates(t *testing.T) {
 	}
 }
 
-// TestResolveIDPrefix_duplicate_lines_are_not_ambiguous verifies that a
-// duplicated ID (as left by a union merge) counts as one candidate, so both a
-// prefix and the full ID still resolve instead of reporting "matches abcdef,
-// abcdef".
-func TestResolveIDPrefix_duplicate_lines_are_not_ambiguous(t *testing.T) {
-	entries := []storage.Entry{
-		{ID: "abcdef"},
-		{ID: "abcdef"},
-		{ID: "ghjkmn"},
-	}
-
-	for _, prefix := range []string{"abc", "abcdef"} {
-		got, err := commands.ResolveIDPrefix(entries, prefix)
-		if err != nil {
-			t.Fatalf("ResolveIDPrefix(%q): unexpected error: %v", prefix, err)
-		}
-		if got != "abcdef" {
-			t.Errorf("ResolveIDPrefix(%q) = %q, want %q", prefix, got, "abcdef")
-		}
-	}
-}
-
 func TestResolveIDPrefix_excluded_letter_not_found(t *testing.T) {
 	// 'i', 'l', 'o' are excluded from the ID alphabet, so any prefix
 	// containing them can never match an entry ID.

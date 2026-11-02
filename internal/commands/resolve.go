@@ -40,15 +40,10 @@ func ResolveIDPrefix(entries []storage.Entry, prefix string) (string, error) {
 	}
 
 	var candidates []string
-	// Count each distinct ID once: a duplicated line (e.g. from a union merge)
-	// must not make an otherwise unique prefix look ambiguous.
-	seen := make(map[string]bool, len(entries))
 	for _, entry := range entries {
-		if !strings.HasPrefix(entry.ID, prefix) || seen[entry.ID] {
-			continue
+		if strings.HasPrefix(entry.ID, prefix) {
+			candidates = append(candidates, entry.ID)
 		}
-		seen[entry.ID] = true
-		candidates = append(candidates, entry.ID)
 	}
 
 	switch len(candidates) {
