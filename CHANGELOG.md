@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.5.5](https://github.com/skorokithakis/gnosis/compare/v0.5.4...v0.5.5) (2026-11-02)
+
+
+### Features
+
+* Reject extra positional arguments in gn write ([692a89f](https://github.com/skorokithakis/gnosis/commit/692a89fd52f44331d50d0763dcaebd84e9ffd752))
+* Tell the agent to commit the .gnosis directory ([4bf572d](https://github.com/skorokithakis/gnosis/commit/4bf572d00a32223f8d8f5fd03470b3011ce71e17))
+* Union-merge gnosis entries and warn on duplicate IDs ([9959008](https://github.com/skorokithakis/gnosis/commit/9959008f2d23b805c2978a79f58180c3861bb935))
+
+
+### Bug Fixes
+
+* Keep entries sorted by ID instead of union-merging them ([9045e96](https://github.com/skorokithakis/gnosis/commit/9045e96ace02b2bcd91b1686d51eade78efcc35c))
+
 ## [0.5.4](https://github.com/skorokithakis/gnosis/compare/v0.5.3...v0.5.4) (2026-07-10)
 
 
