@@ -5,10 +5,12 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"math/rand/v2"
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 	"unicode"
 
@@ -27,6 +29,15 @@ const IDAlphabet = "abcdefghjkmnpqrstuvwxyz"
 // so that callers can use it to distinguish ID-prefix queries from topic queries
 // without duplicating the constant.
 const IDLength = 6
+
+// gitattributesName is the name of the merge-rule file gn creates inside
+// .gnosis. Its content tells git to union-merge JSONL files, so that branches
+// which each append entries merge cleanly instead of conflicting on every
+// append.
+const (
+	gitattributesName    = ".gitattributes"
+	gitattributesContent = "*.jsonl merge=union\n"
+)
 
 // Entry is the canonical in-memory representation of a knowledge entry. Topics
 // always holds the normalized form (e.g. "keymaster-token-auth"), never the
@@ -47,6 +58,20 @@ type Entry struct {
 type Store struct {
 	gnosisDir string
 	cacheDir  string
+	// stderr receives non-fatal warnings. It is nil by default, which discards
+	// them, so that library callers and tests need not provide a writer.
+	// Storage never writes to os.Stderr directly; the CLI supplies os.Stderr
+	// via SetStderr.
+	stderr io.Writer
+	// gitattributesHintOnce keeps the hint for a newly created .gitattributes
+	// to one print per process even when ensureDir runs many times. Production
+	// code creates a single Store per process, so a per-store Once is enough.
+	gitattributesHintOnce sync.Once
+	// duplicateWarnedMu guards duplicateWarned. Commands read the store several
+	// times, so duplicate-ID warnings must be remembered across reads; the map
+	// is keyed by ID and is nil until the first duplicate is seen.
+	duplicateWarnedMu sync.Mutex
+	duplicateWarned   map[string]bool
 }
 
 // NewStore resolves the repo root (by walking up from the current working
@@ -77,6 +102,24 @@ func NewStoreAt(gnosisDir, cacheDir string) (*Store, error) {
 	return &Store{gnosisDir: gnosisDir, cacheDir: cacheDir}, nil
 }
 
+// SetStderr sets the writer that receives non-fatal warnings, such as the hint
+// printed when .gnosis/.gitattributes is created. Passing nil discards them.
+// It must be called before the store is used concurrently; the CLI calls it
+// once at startup.
+func (store *Store) SetStderr(writer io.Writer) {
+	store.stderr = writer
+}
+
+// warnf writes a "gn: "-prefixed warning to the store's stderr writer. A nil
+// writer discards the message, which keeps the warning optional for tests and
+// library callers.
+func (store *Store) warnf(format string, args ...any) {
+	if store.stderr == nil {
+		return
+	}
+	fmt.Fprintf(store.stderr, "gn: "+format+"\n", args...)
+}
+
 // GnosisDir returns the path to the .gnosis directory this store uses.
 func (store *Store) GnosisDir() string {
 	return store.gnosisDir
@@ -87,6 +130,12 @@ func (store *Store) entriesPath() string {
 	return filepath.Join(store.gnosisDir, "entries.jsonl")
 }
 
+// entriesDisplayPath returns the entries file path in the form used in user
+// warnings: relative to the repo root, e.g. ".gnosis/entries.jsonl".
+func (store *Store) entriesDisplayPath() string {
+	return filepath.Join(filepath.Base(store.gnosisDir), "entries.jsonl")
+}
+
 // lockPath returns the path to the lock file used to serialise rewrites.
 // The lock file lives in the cache directory (alongside index.db), not in the
 // repo, because it is purely runtime coordination state.
@@ -94,9 +143,59 @@ func (store *Store) lockPath() string {
 	return filepath.Join(store.cacheDir, "lock")
 }
 
-// ensureDir creates the .gnosis directory if it does not already exist.
+// ensureDir creates the .gnosis directory if it does not already exist, then
+// makes sure it contains the .gitattributes union-merge rule. It is the single
+// helper every writer uses, so read-only commands (which never call it) cannot
+// create either. Creating .gitattributes is best-effort: a failure is reported
+// as a warning and never fails the write.
 func (store *Store) ensureDir() error {
-	return os.MkdirAll(store.gnosisDir, 0o755)
+	if err := os.MkdirAll(store.gnosisDir, 0o755); err != nil {
+		return err
+	}
+	store.ensureGitattributes()
+	return nil
+}
+
+// ensureGitattributes creates .gnosis/.gitattributes with git's union merge
+// rule for JSONL files if it does not already exist. An existing file is never
+// overwritten, because the user may have added their own rules, and failures
+// are only warned about: the merge rule is a convenience, not a requirement for
+// writing entries.
+func (store *Store) ensureGitattributes() {
+	path := filepath.Join(store.gnosisDir, gitattributesName)
+
+	// O_EXCL makes "create only if missing" atomic, and also means an existing
+	// file is left byte-for-byte untouched.
+	file, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o644)
+	if err != nil {
+		if errors.Is(err, os.ErrExist) {
+			return
+		}
+		store.gitattributesHintOnce.Do(func() {
+			store.warnf("could not create .gnosis/.gitattributes: %v", err)
+		})
+		return
+	}
+
+	_, writeErr := file.WriteString(gitattributesContent)
+	closeErr := file.Close()
+	if writeErr == nil && closeErr == nil {
+		store.gitattributesHintOnce.Do(func() {
+			store.warnf("created .gnosis/.gitattributes — add it to version control.")
+		})
+		return
+	}
+
+	// Do not leave a partial file behind: O_EXCL would treat it as an existing
+	// .gitattributes on the next attempt and never retry.
+	os.Remove(path) //nolint:errcheck
+	err = writeErr
+	if err == nil {
+		err = closeErr
+	}
+	store.gitattributesHintOnce.Do(func() {
+		store.warnf("could not write .gnosis/.gitattributes: %v", err)
+	})
 }
 
 // ensureCacheDir creates the cache directory if it does not already exist.
@@ -284,6 +383,11 @@ func (store *Store) readAllUnlocked() ([]Entry, error) {
 	const maxTokenSize = 10 * 1024 * 1024
 	scanner.Buffer(make([]byte, bufio.MaxScanTokenSize), maxTokenSize)
 	lineNumber := 0
+	// idCounts and idOrder track how many lines carry each ID, in first-seen
+	// order, so duplicated IDs (which union merges can leave behind) can be
+	// reported deterministically after the whole file has been read.
+	idCounts := make(map[string]int)
+	var idOrder []string
 	for scanner.Scan() {
 		lineNumber++
 		line := scanner.Bytes()
@@ -297,12 +401,47 @@ func (store *Store) readAllUnlocked() ([]Entry, error) {
 		// Normalize topics on read so that legacy JSONL with non-normalized
 		// topics self-heals without requiring an explicit migration step.
 		entry.Topics = normalizeTopics(entry.Topics)
+		if _, seen := idCounts[entry.ID]; !seen {
+			idOrder = append(idOrder, entry.ID)
+		}
+		idCounts[entry.ID]++
 		entries = append(entries, entry)
 	}
 	if err := scanner.Err(); err != nil {
 		return nil, fmt.Errorf("reading entries file: %w", err)
 	}
+	store.warnDuplicateIDs(idOrder, idCounts)
 	return entries, nil
+}
+
+// warnDuplicateIDs reports entries whose ID appears on more than one line,
+// which a union merge can produce when both branches edited the same entry.
+// It warns at most once per ID per Store (and therefore per process in normal
+// CLI use), because a single command reads the store several times. An empty
+// ID is skipped: it is not a look-up key and the message would be meaningless.
+func (store *Store) warnDuplicateIDs(idOrder []string, idCounts map[string]int) {
+	for _, id := range idOrder {
+		count := idCounts[id]
+		if count < 2 || id == "" {
+			continue
+		}
+
+		store.duplicateWarnedMu.Lock()
+		alreadyWarned := store.duplicateWarned[id]
+		if !alreadyWarned {
+			if store.duplicateWarned == nil {
+				store.duplicateWarned = make(map[string]bool)
+			}
+			store.duplicateWarned[id] = true
+		}
+		store.duplicateWarnedMu.Unlock()
+
+		if alreadyWarned {
+			continue
+		}
+		store.warnf("entry %s appears on %d lines in %s (probably from a git merge); remove the stale line by hand.",
+			id, count, store.entriesDisplayPath())
+	}
 }
 
 // Rewrite atomically replaces the entire entries file with the given slice.

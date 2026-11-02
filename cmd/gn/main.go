@@ -58,6 +58,7 @@ func main() {
 		fmt.Fprintf(os.Stderr, "gn: %v\n", err)
 		os.Exit(1)
 	}
+	store.SetStderr(os.Stderr)
 
 	switch os.Args[1] {
 	case "write":
