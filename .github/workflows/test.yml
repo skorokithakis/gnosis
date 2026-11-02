@@ -3,6 +3,16 @@ name: Test
 on:
   push:
   pull_request:
+    # Release Please opens its PR as github-actions[bot], which GitHub treats
+    # as a first-time contributor, so every run would wait for manual
+    # approval. That PR only touches these two files, and the code was
+    # already tested on its push to main, so do not trigger on it.
+    # paths-ignore is used because pull_request branch filters match the
+    # base branch, not the head branch, and a job-level `if` would still
+    # create a run that needs approval.
+    paths-ignore:
+      - CHANGELOG.md
+      - .release-please-manifest.json
 
 jobs:
   test:
