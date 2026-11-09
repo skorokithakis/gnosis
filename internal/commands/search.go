@@ -13,10 +13,13 @@ import (
 )
 
 // nonAlphanumericPattern matches one or more consecutive characters that are
-// neither alphanumeric nor whitespace. These are replaced with a single space
-// when sanitizing a bareword so that e.g. "keymaster-token-auth" becomes
-// "keymaster token auth", which FTS5 interprets as an AND-of-three-terms match.
-var nonAlphanumericPattern = regexp.MustCompile(`[^a-zA-Z0-9\s]+`)
+// neither alphanumeric, nor CJK, nor whitespace. These are replaced with a
+// single space when sanitizing a bareword so that e.g. "keymaster-token-auth"
+// becomes "keymaster token auth", which FTS5 interprets as an
+// AND-of-three-terms match. CJK characters are preserved so that
+// sanitizeQuery can segment them (SegmentCJK) instead of erasing them —
+// unicode61 cannot match Chinese unless it is segmented first.
+var nonAlphanumericPattern = regexp.MustCompile(`[^a-zA-Z0-9\s\p{Han}\p{Hiragana}\p{Katakana}\p{Hangul}]+`)
 
 // whitespaceRunPattern matches one or more consecutive whitespace characters,
 // including newlines. Used to collapse multi-line FTS5 snippets to a single line.
@@ -50,7 +53,15 @@ func sanitizeQuery(query string) string {
 			if j < n {
 				j++ // include closing quote
 			}
-			result.WriteString(query[i:j])
+			inner := query[i:j]
+			if index.HasCJK(inner) {
+				// The index stores jieba-segmented CJK, so an unsegmented
+				// quoted phrase would never match. Segment the inner text
+				// the same way the indexer did and keep the quotes, which
+				// turn the segmented tokens into an exact-adjacency phrase.
+				inner = index.SegmentCJK(inner)
+			}
+			result.WriteString(inner)
 			i = j
 			continue
 		}
@@ -81,7 +92,18 @@ func sanitizeQuery(query string) string {
 			result.WriteString(word)
 		} else {
 			// Rule 4: Sanitize the bareword.
-			result.WriteString(nonAlphanumericPattern.ReplaceAllString(word, " "))
+			word = nonAlphanumericPattern.ReplaceAllString(word, " ")
+			if index.HasCJK(word) {
+				// Segment the CJK runs the same way the indexer did. A
+				// segmented word becomes a quoted phrase so that FTS5
+				// requires the tokens to be adjacent, mirroring how they
+				// were written in the original text.
+				word = index.SegmentCJK(word)
+				if strings.Contains(word, " ") {
+					word = `"` + word + `"`
+				}
+			}
+			result.WriteString(word)
 		}
 
 		i = j

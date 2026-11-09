@@ -164,7 +164,7 @@ func (index *Index) Rebuild() error {
 
 	for _, entry := range entries {
 		topicsText := buildTopicsText(entry.Topics)
-		if _, err := stmt.Exec(entry.ID, entry.Text, topicsText); err != nil {
+		if _, err := stmt.Exec(entry.ID, SegmentCJK(entry.Text), SegmentCJK(topicsText)); err != nil {
 			return fmt.Errorf("inserting entry %q: %w", entry.ID, err)
 		}
 	}
@@ -239,6 +239,10 @@ func (index *Index) Search(query string, limit int) ([]SearchHit, error) {
 		if err := rows.Scan(&hit.EntryID, &hit.Snippet, &hit.Rank); err != nil {
 			return nil, fmt.Errorf("scanning search result: %w", err)
 		}
+		// The indexed text carries jieba-segmented CJK (see SegmentCJK), so
+		// snippets read with spaces inside Chinese words until they are
+		// restored to the original spacing here.
+		hit.Snippet = RestoreSnippetSpaces(hit.Snippet)
 		hits = append(hits, hit)
 	}
 	if err := rows.Err(); err != nil {
