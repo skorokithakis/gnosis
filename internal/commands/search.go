@@ -6,6 +6,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"unicode"
 
 	"github.com/skorokithakis/gnosis/internal/index"
 	"github.com/skorokithakis/gnosis/internal/storage"
@@ -13,10 +14,12 @@ import (
 )
 
 // nonAlphanumericPattern matches one or more consecutive characters that are
-// neither alphanumeric nor whitespace. These are replaced with a single space
-// when sanitizing a bareword so that e.g. "keymaster-token-auth" becomes
-// "keymaster token auth", which FTS5 interprets as an AND-of-three-terms match.
-var nonAlphanumericPattern = regexp.MustCompile(`[^a-zA-Z0-9\s]+`)
+// neither a Unicode letter or digit nor whitespace. These are replaced with a
+// single space when sanitizing a bareword so that e.g. "keymaster-token-auth"
+// becomes "keymaster token auth", which FTS5 interprets as an AND-of-three-terms
+// match. Unicode classes are used so that accented letters ("café") and CJK
+// characters survive sanitization instead of being turned into spaces.
+var nonAlphanumericPattern = regexp.MustCompile(`[^\p{L}\p{N}\s]+`)
 
 // whitespaceRunPattern matches one or more consecutive whitespace characters,
 // including newlines. Used to collapse multi-line FTS5 snippets to a single line.
@@ -24,14 +27,20 @@ var whitespaceRunPattern = regexp.MustCompile(`\s+`)
 
 // sanitizeQuery prepares a user-supplied FTS5 query string by scanning
 // left-to-right and applying four rules:
-//  1. Quoted phrases "..." pass through verbatim (including the quotes).
+//  1. Quoted phrases "..." pass through with their content run through
+//     index.SplitCJK, so '"非法状态"' becomes '"非 法 状 态"'. Quoted content
+//     without CJK is left byte-for-byte unchanged.
 //  2. Structural chars (, ), :, and whitespace pass through verbatim.
 //  3. Whole-word uppercase tokens AND, OR, NOT pass through verbatim.
-//  4. Every other bareword run has non-alphanumeric chars replaced with spaces.
+//  4. Every other bareword run keeps Unicode letters and digits, replaces the
+//     rest with spaces, and turns each maximal run of CJK characters into a
+//     quoted phrase of single characters: 'API状态' becomes 'API "状 态"'.
 //
 // This allows queries like "foo OR latest-release" to work: the OR operator is
 // preserved while the hyphen in "latest-release" is sanitized so that FTS5 does
-// not parse it as "latest - release" (column-filter operator).
+// not parse it as "latest - release" (column-filter operator). The CJK phrases
+// are needed because the index stores each CJK character as its own token, so a
+// bare CJK run would otherwise be looked up as one unmatchable token.
 func sanitizeQuery(query string) string {
 	var result strings.Builder
 	i := 0
@@ -40,17 +49,23 @@ func sanitizeQuery(query string) string {
 	for i < n {
 		c := query[i]
 
-		// Rule 1: Quoted phrases "..." pass through verbatim.
+		// Rule 1: Quoted phrases "..." pass through, with their content split
+		// the same way the index splits it.
 		if c == '"' {
 			// Scan to the closing quote.
 			j := i + 1
 			for j < n && query[j] != '"' {
 				j++
 			}
+			contentEnd := j
 			if j < n {
 				j++ // include closing quote
 			}
-			result.WriteString(query[i:j])
+			result.WriteByte('"')
+			result.WriteString(index.SplitCJK(query[i+1 : contentEnd]))
+			if contentEnd < j {
+				result.WriteByte('"')
+			}
 			i = j
 			continue
 		}
@@ -80,14 +95,85 @@ func sanitizeQuery(query string) string {
 		if word == "AND" || word == "OR" || word == "NOT" {
 			result.WriteString(word)
 		} else {
-			// Rule 4: Sanitize the bareword.
-			result.WriteString(nonAlphanumericPattern.ReplaceAllString(word, " "))
+			// Rule 4: Sanitize the bareword, then phrase its CJK runs.
+			sanitized := nonAlphanumericPattern.ReplaceAllString(word, " ")
+			result.WriteString(quoteCJKRuns(sanitized))
 		}
 
 		i = j
 	}
 
 	return result.String()
+}
+
+// quoteCJKRuns replaces every maximal run of CJK characters in text with a
+// quoted FTS5 phrase of space-separated single characters. A space is written
+// between a quoted phrase and neighbouring text so FTS5 sees separate terms;
+// existing spaces are not doubled and no trailing space is left behind.
+func quoteCJKRuns(text string) string {
+	runes := []rune(text)
+
+	var builder strings.Builder
+	builder.Grow(len(text) + len(text)/2)
+	// spacePending is set after a quoted phrase so the following rune is
+	// separated from the closing quote. lastWasSpace tracks whether a separator
+	// already precedes the current position.
+	spacePending := false
+	lastWasSpace := true // the start of the text behaves like a separator
+
+	for i := 0; i < len(runes); {
+		r := runes[i]
+
+		if index.IsCJK(r) {
+			if !lastWasSpace {
+				builder.WriteByte(' ')
+			}
+			builder.WriteByte('"')
+			for {
+				builder.WriteRune(runes[i])
+				i++
+				if i >= len(runes) || !index.IsCJK(runes[i]) {
+					break
+				}
+				builder.WriteByte(' ')
+			}
+			builder.WriteByte('"')
+			spacePending = true
+			lastWasSpace = false
+			continue
+		}
+
+		if r == ' ' {
+			builder.WriteByte(' ')
+			spacePending = false
+			lastWasSpace = true
+			i++
+			continue
+		}
+
+		if spacePending {
+			builder.WriteByte(' ')
+			spacePending = false
+		}
+		builder.WriteRune(r)
+		lastWasSpace = false
+		i++
+	}
+
+	return builder.String()
+}
+
+// hasSearchableTerms reports whether query contains at least one Unicode letter
+// or digit. A query with none (for example "---" or an empty quoted phrase)
+// would only reach FTS5 as operators and punctuation, where it fails with a
+// syntax error, so Search rejects it before touching the index.
+func hasSearchableTerms(query string) bool {
+	for _, r := range query {
+		if unicode.IsLetter(r) || unicode.IsDigit(r) {
+			return true
+		}
+	}
+	return false
 }
 
 const defaultSearchLimit = 20
@@ -125,6 +211,10 @@ func Search(store *storage.Store, argv []string, writer io.Writer) error {
 	query := strings.Join(queryArgs, " ")
 
 	query = sanitizeQuery(query)
+
+	if !hasSearchableTerms(query) {
+		return fmt.Errorf("query has no searchable terms")
+	}
 
 	repoRoot, err := storage.FindRepoRoot()
 	if err != nil {

@@ -315,3 +315,67 @@ func TestSearch_snippet_has_no_newlines(t *testing.T) {
 		t.Errorf("expected exactly 1 output line for 1 result, got %d lines: %q", len(lines), result)
 	}
 }
+
+// TestSearch_CJK_queries verifies that a CJK entry can be found by a bare CJK
+// run, a quoted CJK phrase, and a mixed query with an explicit OR, and that the
+// printed snippet contains the original text without the separators the index
+// adds between CJK characters.
+func TestSearch_CJK_queries(t *testing.T) {
+	store := newSearchTestStore(t)
+	entry := makeSearchEntry("aaaaaa", []string{"GoLang"}, "非法状态流转")
+	if err := store.Append(entry); err != nil {
+		t.Fatalf("Append: %v", err)
+	}
+
+	queries := []struct {
+		name  string
+		query string
+	}{
+		{"bare CJK run", "状态流转"},
+		{"quoted CJK phrase", `"状态"`},
+		{"mixed CJK with OR", "API状态 OR 流转"},
+	}
+
+	for _, tc := range queries {
+		t.Run(tc.name, func(t *testing.T) {
+			var output strings.Builder
+			if err := commands.Search(store, []string{tc.query}, &output); err != nil {
+				t.Fatalf("Search(%q): %v", tc.query, err)
+			}
+
+			result := output.String()
+			if !strings.Contains(result, "aaaaaa") {
+				t.Fatalf("query %q did not find expected entry: %q", tc.query, result)
+			}
+			for _, spaced := range []string{"状 态", "流 转", "非 法"} {
+				if strings.Contains(result, spaced) {
+					t.Errorf("query %q printed CJK separators %q in snippet: %q", tc.query, spaced, result)
+				}
+			}
+		})
+	}
+}
+
+// TestSearch_no_searchable_terms_returns_error verifies that a query made only
+// of punctuation or an empty quoted phrase is rejected with a clear error
+// before the index is opened. A nil store proves the index is never touched.
+func TestSearch_no_searchable_terms_returns_error(t *testing.T) {
+	queries := []string{"---", `""`}
+
+	for _, query := range queries {
+		t.Run(query, func(t *testing.T) {
+			var output strings.Builder
+			err := commands.Search(nil, []string{query}, &output)
+			if err == nil {
+				t.Fatal("expected error for query with no searchable terms, got nil")
+			}
+			const want = "query has no searchable terms"
+			if err.Error() != want {
+				t.Errorf("error = %q, want %q", err.Error(), want)
+			}
+			if output.String() != "" {
+				t.Errorf("expected no output, got %q", output.String())
+			}
+		})
+	}
+}
