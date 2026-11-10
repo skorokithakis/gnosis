@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.5.6](https://github.com/skorokithakis/gnosis/compare/v0.5.5...v0.5.6) (2026-11-10)
+
+
+### Bug Fixes
+
+* Make search work for Chinese and Japanese text ([6789df9](https://github.com/skorokithakis/gnosis/commit/6789df97a58ff76eddd1328da5b51fa572b03fa8))
+
 ## [0.5.5](https://github.com/skorokithakis/gnosis/compare/v0.5.4...v0.5.5) (2026-11-02)
 
 
