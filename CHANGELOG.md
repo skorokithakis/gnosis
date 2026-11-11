@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.5.7](https://github.com/skorokithakis/gnosis/compare/v0.5.6...v0.5.7) (2026-11-11)
+
+
+### Features
+
+* Add gn version command ([a0e7fc2](https://github.com/skorokithakis/gnosis/commit/a0e7fc24adc247d0726eb1b17c4262934167e20f))
+
 ## [0.5.6](https://github.com/skorokithakis/gnosis/compare/v0.5.5...v0.5.6) (2026-11-10)
 
 
