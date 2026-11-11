@@ -54,7 +54,10 @@ gn show <id|topic>         Show one entry, or every entry under a topic.
 gn latest                  The most recent entries.
 gn topics                  All topics with entry counts.
 gn edit <id>               Edit an entry in $EDITOR.
+gn edit <id> "text"        Replace the body non-interactively; topics and related are preserved.
+echo "text" | gn edit <id> Same as above, reading the body from stdin.
 gn rm <id>                 Remove an entry.
+gn version                 Print the version.
 ```
 
 Entries have six-letter IDs, and any unique prefix works where an ID is expected.

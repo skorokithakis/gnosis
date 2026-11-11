@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"os"
+	"runtime/debug"
 
 	"github.com/mattn/go-isatty"
 	"github.com/skorokithakis/gnosis/internal/commands"
@@ -10,6 +11,20 @@ import (
 	"github.com/skorokithakis/gnosis/internal/storage"
 	"golang.org/x/term"
 )
+
+// buildVersion reports the version the Go toolchain stamped into the binary:
+// the git tag for tagged builds, or a pseudo-version carrying the commit hash
+// for untagged ones (Go 1.24+). There is no -ldflags path because `go install`
+// and `make install` would not set it, leaving us with a second source of
+// truth. Builds with no module information at all, such as a bare `go build`
+// of a single file, report "(devel)", which is the conventional answer.
+func buildVersion() string {
+	info, ok := debug.ReadBuildInfo()
+	if !ok || info.Main.Version == "" {
+		return "(devel)"
+	}
+	return info.Main.Version
+}
 
 // printHelp prints a doctrine body followed by the shared commands
 // reference, so every help surface ends with the command list.
@@ -25,11 +40,14 @@ func main() {
 		return
 	}
 
-	// Dispatch help and reject unknown commands before creating a store, so
-	// that `gn help` and `gn <typo>` work even outside of a repo. Every other
-	// command needs a store; it is created once after this gate instead of
-	// being re-opened in each case.
+	// Dispatch help, version and unknown commands before creating a store, so
+	// that they work even outside of a repo. Every other command needs a
+	// store; it is created once after this gate instead of being re-opened in
+	// each case.
 	switch os.Args[1] {
+	case "version", "--version":
+		fmt.Printf("gn %s\n", buildVersion())
+		return
 	case "help":
 		if len(os.Args) < 3 {
 			printHelp(doctrine.Help)

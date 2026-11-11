@@ -17,6 +17,7 @@ COMMANDS
   echo "text" | gn edit <id>   Same as above via stdin.
   gn rm <id> [id...]     Remove entries.
   gn reindex             Rebuild the search index.
+  gn version             Print the version (also gn --version).
 
 Entries are identified by short IDs (six lowercase letters), printed
 when you create them. Each entry tracks when it was created and last
