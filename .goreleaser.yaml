@@ -38,11 +38,14 @@ homebrew_casks:
     binaries:
       - gn
     # Remove the quarantine bit so macOS doesn't block an unsigned binary.
+    # install_steps emits Homebrew's postflight_steps stanza; the Ruby
+    # postflight block that `install` emits is deprecated. Requires
+    # goreleaser >= v2.19.
     hooks:
       post:
-        install: |
-          if OS.mac?
-            system_command "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "#{staged_path}/gn"]
+        install_steps: |
+          on_macos do
+            run "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "{{ .StagedPath }}/gn"]
           end
     repository:
       # Requires a HOMEBREW_TAP_GITHUB_TOKEN secret in the gnosis repo with
