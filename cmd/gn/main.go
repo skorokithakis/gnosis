@@ -3,7 +3,9 @@ package main
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 	"runtime/debug"
+	"time"
 
 	"github.com/mattn/go-isatty"
 	"github.com/skorokithakis/gnosis/internal/commands"
@@ -34,6 +36,32 @@ func printHelp(body string) {
 	fmt.Print(doctrine.Commands)
 }
 
+// printHousekeeping appends the stale-entry block to `gn help review`. It checks
+// for .gnosis before opening the store because NewStore resolves a cache
+// directory, which fails when HOME and XDG_CACHE_HOME are unset; help must still
+// work outside a repository in that environment. FindRepoRoot deliberately
+// falls back to the current directory instead of reporting "not a repo", so the
+// .gnosis existence check is what distinguishes a knowledge base from an
+// ordinary directory.
+func printHousekeeping() error {
+	repoRoot, err := storage.FindRepoRoot()
+	if err != nil {
+		return err
+	}
+	if _, err := os.Stat(filepath.Join(repoRoot, ".gnosis")); err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return err
+	}
+
+	store, err := storage.NewStore()
+	if err != nil {
+		return err
+	}
+	return commands.Housekeeping(store, time.Now().UTC(), os.Stdout)
+}
+
 func main() {
 	if len(os.Args) < 2 {
 		printHelp(doctrine.Help)
@@ -58,12 +86,16 @@ func main() {
 			printHelp(doctrine.Plan)
 		case "review":
 			printHelp(doctrine.Review)
+			if err := printHousekeeping(); err != nil {
+				fmt.Fprintf(os.Stderr, "gn: %v\n", err)
+				os.Exit(1)
+			}
 		default:
 			fmt.Fprintf(os.Stderr, "gn: unknown help topic %q\n", os.Args[2])
 			os.Exit(1)
 		}
 		return
-	case "write", "search", "latest", "show", "topics", "edit", "rm", "reindex":
+	case "write", "search", "latest", "show", "topics", "edit", "rm", "verify", "reindex":
 		// Known command that needs a store; fall through to creation + dispatch.
 	default:
 		fmt.Fprintf(os.Stderr, "gn: unknown command %q\n", os.Args[1])
@@ -128,6 +160,11 @@ func main() {
 		}
 	case "rm":
 		if err := commands.Remove(store, os.Args[2:], os.Stdout, os.Stderr); err != nil {
+			fmt.Fprintf(os.Stderr, "gn: %v\n", err)
+			os.Exit(1)
+		}
+	case "verify":
+		if err := commands.Verify(store, os.Args[2:], os.Stdout); err != nil {
 			fmt.Fprintf(os.Stderr, "gn: %v\n", err)
 			os.Exit(1)
 		}

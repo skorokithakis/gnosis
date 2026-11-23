@@ -57,6 +57,7 @@ gn edit <id>               Edit an entry in $EDITOR.
 gn edit <id> "text"        Replace the body non-interactively; topics and related are preserved.
 echo "text" | gn edit <id> Same as above, reading the body from stdin.
 gn rm <id>                 Remove an entry.
+gn verify <id>             Mark an entry as still accurate, resetting its age.
 gn version                 Print the version.
 ```
 

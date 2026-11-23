@@ -76,33 +76,48 @@ func Latest(store *storage.Store, argv []string, writer io.Writer) error {
 		allIDs[index] = entry.ID
 	}
 
-	// Determine the maximum primary-topic width across the visible results so
-	// that snippets start at a consistent horizontal position.
-	maxTopicWidth := 0
+	topicWidth := maxTopicWidth(sorted)
 	for _, entry := range sorted {
-		topic := primaryTopicOf(entry)
-		if len(topic) > maxTopicWidth {
-			maxTopicWidth = len(topic)
-		}
-	}
-
-	for _, entry := range sorted {
-		primaryTopic := primaryTopicOf(entry)
-		// Collapse whitespace runs (including embedded newlines) to single
-		// spaces so each result occupies exactly one output line.
-		snippet := whitespaceRunPattern.ReplaceAllString(entry.Text, " ")
-		// Truncate by rune count, not byte count, so multi-byte characters
-		// do not produce a partial code point at the cut point.
-		if runes := []rune(snippet); len(runes) > snippetMaxRunes {
-			snippet = string(runes[:snippetMaxRunes]) + "…"
-		}
-
-		coloredID := termcolor.UniqueID(entry.ID, allIDs)
-		coloredDate := termcolor.Date(entry.UpdatedAt.Format("2006-01-02"))
-		coloredTopic := termcolor.Topic(primaryTopic)
-		topicPad := strings.Repeat(" ", maxTopicWidth-len(primaryTopic))
-		fmt.Fprintf(writer, "%s  %s  %s%s  %s\n", coloredID, coloredDate, coloredTopic, topicPad, snippet)
+		fmt.Fprintln(writer, formatEntryLine(entry, allIDs, topicWidth))
 	}
 
 	return nil
+}
+
+// maxTopicWidth returns the width of the longest primary topic in entries. It
+// exists so that a group of entries printed together can pad every primary
+// topic to the same column, keeping their snippets aligned.
+func maxTopicWidth(entries []storage.Entry) int {
+	width := 0
+	for _, entry := range entries {
+		if topicWidth := len(primaryTopicOf(entry)); topicWidth > width {
+			width = topicWidth
+		}
+	}
+	return width
+}
+
+// formatEntryLine renders one entry in the short single-line format shared by
+// `gn latest` and the stale-entry block in `gn help review`. topicWidth must be
+// the width of the widest primary topic among the entries being printed
+// together, so that snippets start in the same column on every line.
+func formatEntryLine(entry storage.Entry, allIDs []string, topicWidth int) string {
+	primaryTopic := primaryTopicOf(entry)
+	// Collapse whitespace runs (including embedded newlines) to single spaces
+	// so each result occupies exactly one output line.
+	snippet := whitespaceRunPattern.ReplaceAllString(entry.Text, " ")
+	// Truncate by rune count, not byte count, so multi-byte characters do not
+	// produce a partial code point at the cut point.
+	if runes := []rune(snippet); len(runes) > snippetMaxRunes {
+		snippet = string(runes[:snippetMaxRunes]) + "…"
+	}
+
+	topicPad := strings.Repeat(" ", topicWidth-len(primaryTopic))
+	return fmt.Sprintf("%s  %s  %s%s  %s",
+		termcolor.UniqueID(entry.ID, allIDs),
+		termcolor.Date(entry.UpdatedAt.Format("2006-01-02")),
+		termcolor.Topic(primaryTopic),
+		topicPad,
+		snippet,
+	)
 }

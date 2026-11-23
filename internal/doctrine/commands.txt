@@ -16,6 +16,7 @@ COMMANDS
   gn edit <id> "text"    Replace text body non-interactively (topics/related preserved).
   echo "text" | gn edit <id>   Same as above via stdin.
   gn rm <id> [id...]     Remove entries.
+  gn verify <id> [id...] Mark entries as still accurate (resets their age).
   gn reindex             Rebuild the search index.
   gn version             Print the version (also gn --version).
 
