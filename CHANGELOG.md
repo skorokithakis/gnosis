@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.5.8](https://github.com/skorokithakis/gnosis/compare/v0.5.7...v0.5.8) (2026-11-23)
+
+
+### Features
+
+* Add gn verify and stale-entry housekeeping in gn help review ([f013c26](https://github.com/skorokithakis/gnosis/commit/f013c26550cdc6d6429a7551d82eaf3307bfd090))
+
 ## [0.5.7](https://github.com/skorokithakis/gnosis/compare/v0.5.6...v0.5.7) (2026-11-11)
 
 
